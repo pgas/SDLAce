@@ -41,6 +41,7 @@ static unsigned char keyboard_ports[8] = {
  * if keyport_index == -1 then no action for that port */
 static const int keypress_response[] = {
   SDLK_F1,         3, 0xfe, 0, 0xfe,   /* Delete line */
+  SDLK_F2,         -1, 0, -1, 0,       /* Reset — handled in emu_key_handler */
   SDLK_F4,         3, 0xf7, 0, 0xfe,   /* Inverse video */
   SDLK_F9,         4, 0xfd, 0, 0xfe,   /* Graphics */
   SDLK_LEFT,       3, 0xef, 0, 0xfe,
@@ -192,15 +193,28 @@ keyboard_process_keyrelease_keyports(AceKeySym ks)
   }
 }
 
-/* ACE shift key: port 0, AND 0xfe */
-#define ACE_SHIFT_PORT 0
-#define ACE_SHIFT_MASK 0xfe
+/* ACE Caps Shift: port 0, AND 0xfe */
+#define ACE_SHIFT_PORT  0
+#define ACE_SHIFT_MASK  0xfe
+/* ACE Symbol Shift: port 0, AND 0xfd */
+#define ACE_SYM_PORT    0
+#define ACE_SYM_MASK    0xfd
 
-/* Returns non-zero if the keycode is a letter key */
+/* Returns non-zero if the keycode is a letter key (a-z) */
 static int
 is_letter_key(AceKeySym ks)
 {
   return (ks >= SDLK_a && ks <= SDLK_z);
+}
+
+/* Returns non-zero if the keycode is a digit key (0-9).
+ * SDL2 on macOS always reports SDLK_1..SDLK_0 + KMOD_SHIFT for shifted
+ * numbers — it never generates SDLK_EXCLAIM, SDLK_AT, etc. directly.
+ * We detect this case and activate the ACE Symbol Shift port ourselves. */
+static int
+is_digit_key(AceKeySym ks)
+{
+  return (ks >= SDLK_0 && ks <= SDLK_9);
 }
 
 void
@@ -208,9 +222,14 @@ keyboard_keypress(AceKeySym ks, int key_state)
 {
   if (!(key_state & ACE_CTRL_MASK)) {
     keyboard_process_keypress_keyports(ks);
-    /* If shift is held for a letter key, also press the ACE shift port */
-    if (is_letter_key(ks) && (key_state & (KMOD_SHIFT | KMOD_CAPS)))
-      keyboard_ports[ACE_SHIFT_PORT] &= ACE_SHIFT_MASK;
+    if (key_state & (KMOD_SHIFT | KMOD_CAPS)) {
+      if (is_letter_key(ks))
+        /* Shift+letter → ACE Caps Shift */
+        keyboard_ports[ACE_SHIFT_PORT] &= ACE_SHIFT_MASK;
+      else if (is_digit_key(ks))
+        /* Shift+digit → ACE Symbol Shift (SDL2 never sends SDLK_EXCLAIM etc.) */
+        keyboard_ports[ACE_SYM_PORT] &= ACE_SYM_MASK;
+    }
   }
   keyboard_non_ace_key_handler(ks, key_state);
 }
@@ -220,8 +239,11 @@ keyboard_keyrelease(AceKeySym ks, int key_state)
 {
   if (!(key_state & ACE_CTRL_MASK)) {
     keyboard_process_keyrelease_keyports(ks);
-    /* Release the ACE shift port when the shift modifier is released */
-    if (is_letter_key(ks) && (key_state & (KMOD_SHIFT | KMOD_CAPS)))
-      keyboard_ports[ACE_SHIFT_PORT] |= ~ACE_SHIFT_MASK;
+    if (key_state & (KMOD_SHIFT | KMOD_CAPS)) {
+      if (is_letter_key(ks))
+        keyboard_ports[ACE_SHIFT_PORT] |= ~ACE_SHIFT_MASK;
+      else if (is_digit_key(ks))
+        keyboard_ports[ACE_SYM_PORT] |= ~ACE_SYM_MASK;
+    }
   }
 }

@@ -270,7 +270,7 @@ emu_key_handler(AceKeySym ks, int key_state)
         spooler_open(spool_filename);
       break;
 
-    case SDLK_F12:
+    case SDLK_F2:
       reset_ace = 1;
       memset(mem + 8192, 0xff, 57344);
       refresh_screen = 1;
@@ -345,7 +345,7 @@ main(int argc, char **argv)
   printf("\tF4     - Inverse Video\n");
   printf("\tF9     - Graphics\n");
   printf("\tF11    - Spool from a file\n");
-  printf("\tF12    - Reset\n");
+  printf("\tF2     - Reset\n");
   printf("\tEsc    - Break\n");
   printf("\tCtrl-Q - Quit xAce\n");
 

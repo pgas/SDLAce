@@ -220,9 +220,9 @@ macos_setup_menu(Uint32 user_event_type)
                   @"Spool from File…\t F11",
                   @selector(acSpoolFromFile:), @"", 0, delegate);
 
-        /* Reset – F12 */
+        /* Reset – F2 */
         make_item(actMenu,
-                  @"Reset\t\t\t\t F12",
+                  @"Reset\t\t\t\t F2",
                   @selector(acReset:), @"", 0, delegate);
 
         [actMenu addItem:[NSMenuItem separatorItem]];
