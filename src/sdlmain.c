@@ -92,9 +92,10 @@ static SDL_Window   *sdl_window   = NULL;
 static SDL_Renderer *sdl_renderer = NULL;
 static SDL_Texture  *sdl_texture  = NULL;
 
-/* Bezel font (SDL_ttf) */
-static TTF_Font *bezel_font_large = NULL;   /* "JUPITER ACE" */
-static TTF_Font *bezel_font_small = NULL;   /* "SDLAce" */
+/* Bezel fonts (SDL_ttf) — sizes scaled for HiDPI in startup() */
+static TTF_Font *bezel_font_jupiter = NULL;  /* "Jupiter" large bold italic */
+static TTF_Font *bezel_font_ace     = NULL;  /* "ACE" medium regular */
+static TTF_Font *bezel_font_small   = NULL;  /* version label */
 
 /* Pixel buffer: 32-bit ARGB, hsize × vsize */
 static Uint32 *pixel_buf = NULL;
@@ -551,29 +552,44 @@ startup(void)
   /* ---- SDL_ttf for bezel text ---- */
   if (TTF_Init() != 0) {
     fprintf(stderr, "TTF_Init failed: %s\n", TTF_GetError());
-    /* Non-fatal: bezel will fall back to no text */
   } else {
-    /* Try several common bold sans-serif font locations */
+    /* HiDPI pixel ratio: TTF_OpenFont uses physical pixels, but we render
+     * into renderer-output space which is 2× on Retina.  Scale font pt
+     * sizes by this ratio so text appears at the right visual size. */
+    int log_w_tmp, log_h_tmp, ren_w_tmp;
+    SDL_GetWindowSize(sdl_window, &log_w_tmp, &log_h_tmp);
+    SDL_GetRendererOutputSize(sdl_renderer, &ren_w_tmp, &log_h_tmp);
+    float px = (log_w_tmp > 0) ? (float)ren_w_tmp / log_w_tmp : 1.0f;
+
+    /* Font sizes: "Jupiter" 34pt, "ACE" 19pt, version 10pt */
+    int pt_jupiter = (int)(34 * px);
+    int pt_ace     = (int)(19 * px);
+    int pt_small   = (int)(10 * px);
+    if (pt_small < 8) pt_small = 8;
+
     const char *font_candidates[] = {
 #ifdef __APPLE__
       "/System/Library/Fonts/HelveticaNeue.ttc",
       "/System/Library/Fonts/Helvetica.ttc",
       "/System/Library/Fonts/ArialHB.ttc",
 #endif
-      /* Linux */
       "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
       "/usr/share/fonts/dejavu/DejaVuSans-Bold.ttf",
       "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf",
       NULL
     };
     int i;
-    for (i = 0; font_candidates[i] && !bezel_font_large; i++) {
-      bezel_font_large = TTF_OpenFont(font_candidates[i], 28);
-      if (bezel_font_large)
-        bezel_font_small = TTF_OpenFont(font_candidates[i], 13);
+    for (i = 0; font_candidates[i] && !bezel_font_jupiter; i++) {
+      bezel_font_jupiter = TTF_OpenFont(font_candidates[i], pt_jupiter);
+      if (bezel_font_jupiter) {
+        /* Apply bold+italic style to "Jupiter" */
+        TTF_SetFontStyle(bezel_font_jupiter, TTF_STYLE_BOLD | TTF_STYLE_ITALIC);
+        bezel_font_ace   = TTF_OpenFont(font_candidates[i], pt_ace);
+        bezel_font_small = TTF_OpenFont(font_candidates[i], pt_small);
+      }
     }
-    if (!bezel_font_large)
-      fprintf(stderr, "SDLAce: no bezel font found, text will be absent\n");
+    if (!bezel_font_jupiter)
+      fprintf(stderr, "SDLAce: no bezel font found\n");
   }
 
 #ifdef __APPLE__
@@ -708,86 +724,141 @@ set_image_character(int x, int y, int inv, unsigned char *charbmap)
 }
 
 /* --------------------------------------------------------------------------
- * Bezel drawing — Jupiter ACE-style cream case with red stripes
+ * Bezel drawing — faithful recreation of the Jupiter ACE logo design:
+ *   • Very light grey background (matches the physical ACE case)
+ *   • "Jupiter" in large bold italic, top-left
+ *   • "ACE" in medium regular weight, slightly indented below "Jupiter"
+ *   • Cascading fan of red horizontal lines: each successive line starts
+ *     further right, all ending at the right edge — creating the
+ *     characteristic staircase/speed-lines motif from the real hardware.
  *
- * Called every time the screen is refreshed.  All coordinates are in
- * renderer output pixels (already HiDPI-aware because we use
- * SDL_GetRendererOutputSize).
+ * All coordinates are renderer-output pixels (HiDPI-aware).
  * -------------------------------------------------------------------------- */
 static void
 draw_bezel(int win_w, int win_h, int dst_x, int dst_y, int dst_w, int dst_h)
 {
-  /* ---- palette ---- */
-  /* Cream case colour matching the physical Jupiter ACE */
-  const Uint8 CR = 240, CG = 235, CB = 220;   /* cream */
-  const Uint8 RR = 196, RG =  30, RB =  30;   /* ACE red stripe */
-  const Uint8 TR =  30, TG =  30, TB =  30;   /* text / dark */
+  /* Palette */
+  const Uint8 BG_R = 235, BG_G = 235, BG_B = 237; /* light grey  */
+  const Uint8 TX_R =  22, TX_G =  22, TX_B =  28; /* near-black text */
+  const Uint8 LN_R = 195, LN_G =  28, LN_B =  38; /* Jupiter ACE red */
 
-  /* Fill the whole window with cream first */
-  SDL_SetRenderDrawColor(sdl_renderer, CR, CG, CB, 255);
+  /* 1. Fill background */
+  SDL_SetRenderDrawColor(sdl_renderer, BG_R, BG_G, BG_B, 255);
   SDL_RenderClear(sdl_renderer);
 
-  /* Thin dark outline around the screen area */
-  SDL_SetRenderDrawColor(sdl_renderer, TR, TG, TB, 255);
-  SDL_Rect outline = { dst_x - 2, dst_y - 2, dst_w + 4, dst_h + 4 };
-  SDL_RenderDrawRect(sdl_renderer, &outline);
+  /* 2. Subtle double-line inset border around the emulated screen */
+  SDL_SetRenderDrawColor(sdl_renderer, 160, 160, 162, 255);
+  SDL_Rect r1 = { dst_x - 3, dst_y - 3, dst_w + 6, dst_h + 6 };
+  SDL_RenderDrawRect(sdl_renderer, &r1);
+  SDL_SetRenderDrawColor(sdl_renderer, TX_R, TX_G, TX_B, 255);
+  SDL_Rect r2 = { dst_x - 1, dst_y - 1, dst_w + 2, dst_h + 2 };
+  SDL_RenderDrawRect(sdl_renderer, &r2);
 
-  /* ---- Top brand area: two red stripes + "JUPITER ACE" text ---- */
-  /* The top border is taller; we put stripes near its top and bottom edges. */
-  int stripe_h   = (int)(win_h * 0.012f);   /* ~1.2% of window height */
-  if (stripe_h < 3) stripe_h = 3;
-  int stripe_gap = stripe_h * 2;
+  /* 3. Text: "Jupiter" + "ACE" ----------------------------------------- */
+  /* Layout: text sits in the top brand area (y=0 .. dst_y).              */
+  /* Horizontal padding from left: ~4% of window width.                    */
+  int pad_l = (int)(win_w * 0.04f);
+  if (pad_l < 8) pad_l = 8;
 
-  /* Upper red stripe (near very top) */
-  SDL_SetRenderDrawColor(sdl_renderer, RR, RG, RB, 255);
-  SDL_Rect stripe_top = { 0, stripe_gap, win_w, stripe_h };
-  SDL_RenderFillRect(sdl_renderer, &stripe_top);
+  /* Vertical centre of the top brand area */
+  int brand_mid = dst_y / 2;
 
-  /* Lower red stripe (just above the screen) */
-  SDL_Rect stripe_bot = { 0, dst_y - stripe_gap - stripe_h, win_w, stripe_h };
-  SDL_RenderFillRect(sdl_renderer, &stripe_bot);
+  int jupiter_w = 0, jupiter_h = 0;  /* rendered size of "Jupiter" */
+  int ace_w     = 0, ace_h     = 0;  /* rendered size of "ACE"     */
 
-  /* Text rendering */
-  if (bezel_font_large) {
-    SDL_Color dark = { TR, TG, TB, 255 };
+  SDL_Color col_text = { TX_R, TX_G, TX_B, 255 };
 
-    /* "JUPITER ACE" centred between the two stripes */
-    SDL_Surface *surf = TTF_RenderUTF8_Blended(bezel_font_large, "JUPITER ACE", dark);
-    if (surf) {
-      SDL_Texture *tex = SDL_CreateTextureFromSurface(sdl_renderer, surf);
-      if (tex) {
-        int text_y_top    = stripe_gap + stripe_h + stripe_gap / 2;
-        int text_y_bottom = dst_y - stripe_gap - stripe_h - stripe_gap / 2;
-        int text_area_h   = text_y_bottom - text_y_top;
-        SDL_Rect tr = {
-          (win_w - surf->w) / 2,
-          text_y_top + (text_area_h - surf->h) / 2,
-          surf->w, surf->h
-        };
-        SDL_RenderCopy(sdl_renderer, tex, NULL, &tr);
-        SDL_DestroyTexture(tex);
+  /* Measure/render "Jupiter" */
+  if (bezel_font_jupiter) {
+    TTF_SizeUTF8(bezel_font_jupiter, "Jupiter", &jupiter_w, &jupiter_h);
+    /* Position: vertically centred but shifted up so ACE fits below */
+    int jup_y = brand_mid - (int)(jupiter_h * 0.65f);
+    SDL_Surface *s = TTF_RenderUTF8_Blended(bezel_font_jupiter, "Jupiter", col_text);
+    if (s) {
+      SDL_Texture *t = SDL_CreateTextureFromSurface(sdl_renderer, s);
+      if (t) {
+        SDL_Rect tr = { pad_l, jup_y, s->w, s->h };
+        SDL_RenderCopy(sdl_renderer, t, NULL, &tr);
+        SDL_DestroyTexture(t);
       }
-      SDL_FreeSurface(surf);
+      SDL_FreeSurface(s);
     }
   }
 
-  /* "SDLAce" small label in the bottom border */
-  if (bezel_font_small) {
-    SDL_Color mid = { 100, 95, 85, 255 };
-    SDL_Surface *surf = TTF_RenderUTF8_Blended(bezel_font_small, "SDLAce v" XACE_VERSION, mid);
-    if (surf) {
-      SDL_Texture *tex = SDL_CreateTextureFromSurface(sdl_renderer, surf);
-      if (tex) {
-        int bot_center = dst_y + dst_h + (win_h - (dst_y + dst_h)) / 2;
-        SDL_Rect tr = {
-          (win_w - surf->w) / 2,
-          bot_center - surf->h / 2,
-          surf->w, surf->h
-        };
-        SDL_RenderCopy(sdl_renderer, tex, NULL, &tr);
-        SDL_DestroyTexture(tex);
+  /* Measure/render "ACE" — slightly indented, immediately below Jupiter */
+  if (bezel_font_ace) {
+    TTF_SizeUTF8(bezel_font_ace, "ACE", &ace_w, &ace_h);
+    int jup_y    = brand_mid - (int)(jupiter_h * 0.65f);
+    int ace_x    = pad_l + (int)(jupiter_w * 0.15f);  /* indent */
+    int ace_y    = jup_y + (int)(jupiter_h * 0.80f);  /* overlap slightly */
+    SDL_Surface *s = TTF_RenderUTF8_Blended(bezel_font_ace, "ACE", col_text);
+    if (s) {
+      SDL_Texture *t = SDL_CreateTextureFromSurface(sdl_renderer, s);
+      if (t) {
+        SDL_Rect tr = { ace_x, ace_y, s->w, s->h };
+        SDL_RenderCopy(sdl_renderer, t, NULL, &tr);
+        SDL_DestroyTexture(t);
       }
-      SDL_FreeSurface(surf);
+      SDL_FreeSurface(s);
+    }
+  }
+
+  /* 4. Cascading red lines --------------------------------------------- */
+  /* The lines form a staircase fan:
+   *   - N_LINES lines total, all ending at the right edge of the window
+   *   - Each successive line's LEFT endpoint is shifted right by cascade_step
+   *   - This creates the speed-lines / fan motif from the real ACE logo
+   * Vertical span: the full top brand area (y=0 .. dst_y)
+   * First line starts where the text ends (x ≈ text_right_edge + gap)   */
+  int n_lines = 9;
+
+  /* Starting x: right edge of the text block + small gap */
+  int text_right = pad_l + (jupiter_w > 0 ? jupiter_w : (int)(win_w * 0.35f));
+  int line_x0    = text_right + (int)(win_w * 0.025f);
+  int line_x1    = win_w;     /* all lines end here */
+
+  /* Cascade: last line starts cascade_total px further right than first */
+  float cascade_total = (float)(line_x1 - line_x0) * 0.55f;
+  float cascade_step  = (n_lines > 1) ? cascade_total / (n_lines - 1) : 0;
+
+  /* Vertical spacing: lines fill ~85% of the top brand height */
+  float line_span = dst_y * 0.85f;
+  float line_step = (n_lines > 1) ? line_span / (n_lines - 1) : line_span;
+  float line_y0   = dst_y * 0.07f;  /* first line near top */
+
+  /* Line thickness: 1px at small windows, 2px at larger ones */
+  int lthick = (win_h > 600) ? 2 : 1;
+
+  SDL_SetRenderDrawColor(sdl_renderer, LN_R, LN_G, LN_B, 255);
+
+  int i;
+  for (i = 0; i < n_lines; i++) {
+    int lx = (int)(line_x0 + i * cascade_step);
+    int ly = (int)(line_y0 + i * line_step);
+    int t;
+    if (lx >= line_x1) continue;   /* don't draw zero-length lines */
+    for (t = 0; t < lthick; t++)
+      SDL_RenderDrawLine(sdl_renderer, lx, ly + t, line_x1, ly + t);
+  }
+
+  /* 5. Tiny "SDLAce" label in the bottom border — right-aligned, muted */
+  if (bezel_font_small) {
+    SDL_Color col_dim = { 160, 158, 155, 255 };
+    SDL_Surface *s = TTF_RenderUTF8_Blended(bezel_font_small,
+                                            "SDLAce v" XACE_VERSION, col_dim);
+    if (s) {
+      SDL_Texture *t = SDL_CreateTextureFromSurface(sdl_renderer, s);
+      if (t) {
+        int bot_mid = dst_y + dst_h + (win_h - dst_y - dst_h) / 2;
+        SDL_Rect tr = {
+          win_w - s->w - pad_l,
+          bot_mid - s->h / 2,
+          s->w, s->h
+        };
+        SDL_RenderCopy(sdl_renderer, t, NULL, &tr);
+        SDL_DestroyTexture(t);
+      }
+      SDL_FreeSurface(s);
     }
   }
 }
@@ -882,8 +953,9 @@ closedown(void)
 {
   tape_clear_observers();
   free(pixel_buf);
-  if (bezel_font_large) TTF_CloseFont(bezel_font_large);
-  if (bezel_font_small) TTF_CloseFont(bezel_font_small);
+  if (bezel_font_jupiter) TTF_CloseFont(bezel_font_jupiter);
+  if (bezel_font_ace)     TTF_CloseFont(bezel_font_ace);
+  if (bezel_font_small)   TTF_CloseFont(bezel_font_small);
   TTF_Quit();
   if (sdl_texture)  SDL_DestroyTexture(sdl_texture);
   if (sdl_renderer) SDL_DestroyRenderer(sdl_renderer);
