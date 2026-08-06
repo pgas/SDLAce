@@ -121,6 +121,40 @@ static const int keypress_response[] = {
   SDLK_TAB,        7, 0xfe, -1, 0
 };
 
+/*
+ * Shifted symbol map: when SDL2 reports a base symbol key + KMOD_SHIFT on
+ * macOS, it doesn't generate a separate shifted keycode (unlike X11's XK_colon
+ * for Shift+;). We map each base key to the ACE keyport combination for the
+ * Shift version of that symbol.
+ *
+ * Format: base_sdlk, keyport1, mask1, keyport2, mask2
+ * (port 0, 0xfd = Symbol Shift throughout)
+ *
+ * Mapping reference (ACE symbol shift + key = result):
+ *   Shift+- = _   sym+0  port 4,0xfe + sym
+ *   Shift+= = +   sym+K  port 6,0xfb + sym
+ *   Shift+[ = {   sym+F  port 1,0xf7 + sym
+ *   Shift+] = }   sym+G  port 1,0xef + sym
+ *   Shift+; = :   sym+Z  port 0,0xfb + sym
+ *   Shift+' = "   sym+P  port 5,0xfe + sym
+ *   Shift+, = <   sym+R  port 2,0xf7 + sym
+ *   Shift+. = >   sym+T  port 2,0xef + sym
+ *   Shift+/ = ?   sym+C  port 0,0xef + sym
+ *   Shift+` = ~   sym+A  port 1,0xfe + sym  (same as bare ` which is also ~)
+ */
+static const int shifted_symbol_response[] = {
+  SDLK_MINUS,        4, 0xfe, 0, 0xfd,   /* Shift+- = _ */
+  SDLK_EQUALS,       6, 0xfb, 0, 0xfd,   /* Shift+= = + */
+  SDLK_LEFTBRACKET,  1, 0xf7, 0, 0xfd,   /* Shift+[ = { */
+  SDLK_RIGHTBRACKET, 1, 0xef, 0, 0xfd,   /* Shift+] = } */
+  SDLK_SEMICOLON,    0, 0xfb, 0, 0xfd,   /* Shift+; = : */
+  SDLK_QUOTE,        5, 0xfe, 0, 0xfd,   /* Shift+' = " */
+  SDLK_COMMA,        2, 0xf7, 0, 0xfd,   /* Shift+, = < */
+  SDLK_PERIOD,       2, 0xef, 0, 0xfd,   /* Shift+. = > */
+  SDLK_SLASH,        0, 0xef, 0, 0xfd,   /* Shift+/ = ? */
+  SDLK_BACKQUOTE,    1, 0xfe, 0, 0xfd,   /* Shift+` = ~ (same as bare `) */
+};
+
 void
 keyboard_init(NonAceKeyHandler non_ace_key_handler)
 {
@@ -207,28 +241,62 @@ is_letter_key(AceKeySym ks)
   return (ks >= SDLK_a && ks <= SDLK_z);
 }
 
-/* Returns non-zero if the keycode is a digit key (0-9).
- * SDL2 on macOS always reports SDLK_1..SDLK_0 + KMOD_SHIFT for shifted
- * numbers — it never generates SDLK_EXCLAIM, SDLK_AT, etc. directly.
- * We detect this case and activate the ACE Symbol Shift port ourselves. */
+/* Returns non-zero if the keycode is a digit key (0-9) */
 static int
 is_digit_key(AceKeySym ks)
 {
   return (ks >= SDLK_0 && ks <= SDLK_9);
 }
 
+/* Returns non-zero if the keycode is a symbol key that has a shifted
+ * alternative in shifted_symbol_response[].  Fills the four port fields. */
+static int
+keyboard_get_shifted_symbol(AceKeySym ks,
+                            int *kp1, int *kp1v,
+                            int *kp2, int *kp2v)
+{
+  int i;
+  int n = (int)(sizeof(shifted_symbol_response) /
+                sizeof(shifted_symbol_response[0]));
+  for (i = 0; i < n; i += 5) {
+    if (shifted_symbol_response[i] == (int)ks) {
+      *kp1  = shifted_symbol_response[i + 1];
+      *kp1v = shifted_symbol_response[i + 2];
+      *kp2  = shifted_symbol_response[i + 3];
+      *kp2v = shifted_symbol_response[i + 4];
+      return 1;
+    }
+  }
+  return 0;
+}
+
 void
 keyboard_keypress(AceKeySym ks, int key_state)
 {
   if (!(key_state & ACE_CTRL_MASK)) {
-    keyboard_process_keypress_keyports(ks);
     if (key_state & (KMOD_SHIFT | KMOD_CAPS)) {
-      if (is_letter_key(ks))
-        /* Shift+letter → ACE Caps Shift */
+      if (is_letter_key(ks)) {
+        /* Shift+letter → base letter key + ACE Caps Shift */
+        keyboard_process_keypress_keyports(ks);
         keyboard_ports[ACE_SHIFT_PORT] &= ACE_SHIFT_MASK;
-      else if (is_digit_key(ks))
-        /* Shift+digit → ACE Symbol Shift (SDL2 never sends SDLK_EXCLAIM etc.) */
+      } else if (is_digit_key(ks)) {
+        /* Shift+digit → base digit key + ACE Symbol Shift
+         * (SDL2 on macOS never generates SDLK_EXCLAIM etc.) */
+        keyboard_process_keypress_keyports(ks);
         keyboard_ports[ACE_SYM_PORT] &= ACE_SYM_MASK;
+      } else {
+        int kp1, kp1v, kp2, kp2v;
+        if (keyboard_get_shifted_symbol(ks, &kp1, &kp1v, &kp2, &kp2v)) {
+          /* Shift+symbol → completely different ACE key combination */
+          keyboard_ports[kp1] &= kp1v;
+          keyboard_ports[kp2] &= kp2v;
+        } else {
+          /* Unknown Shift+key: fall through to base mapping */
+          keyboard_process_keypress_keyports(ks);
+        }
+      }
+    } else {
+      keyboard_process_keypress_keyports(ks);
     }
   }
   keyboard_non_ace_key_handler(ks, key_state);
@@ -238,12 +306,24 @@ void
 keyboard_keyrelease(AceKeySym ks, int key_state)
 {
   if (!(key_state & ACE_CTRL_MASK)) {
-    keyboard_process_keyrelease_keyports(ks);
     if (key_state & (KMOD_SHIFT | KMOD_CAPS)) {
-      if (is_letter_key(ks))
+      if (is_letter_key(ks)) {
+        keyboard_process_keyrelease_keyports(ks);
         keyboard_ports[ACE_SHIFT_PORT] |= ~ACE_SHIFT_MASK;
-      else if (is_digit_key(ks))
+      } else if (is_digit_key(ks)) {
+        keyboard_process_keyrelease_keyports(ks);
         keyboard_ports[ACE_SYM_PORT] |= ~ACE_SYM_MASK;
+      } else {
+        int kp1, kp1v, kp2, kp2v;
+        if (keyboard_get_shifted_symbol(ks, &kp1, &kp1v, &kp2, &kp2v)) {
+          keyboard_ports[kp1] |= ~kp1v;
+          keyboard_ports[kp2] |= ~kp2v;
+        } else {
+          keyboard_process_keyrelease_keyports(ks);
+        }
+      }
+    } else {
+      keyboard_process_keyrelease_keyports(ks);
     }
   }
 }
