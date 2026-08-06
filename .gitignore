@@ -23,3 +23,7 @@ CMakeCache.txt
 *.cmake
 /Testing
 /install_manifest.txt
+
+# Build directory
+/build/
+/build_*/
