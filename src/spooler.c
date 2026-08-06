@@ -18,7 +18,6 @@
  */
 
 #include <stdio.h>
-#include <X11/Xlib.h>
 
 #include "spooler.h"
 
@@ -72,7 +71,7 @@ spooler_close(void)
 static void
 spooler_read_char(void)
 {
-  KeySym ks;
+  AceKeySym ks;
 
   ks = fgetc(spooler_file);
   if (ks == EOF) {

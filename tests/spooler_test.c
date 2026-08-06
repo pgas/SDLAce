@@ -27,7 +27,7 @@ static struct {
   int observer_called;
   int clear_keyboard_called;
   int keypress_called;
-  KeySym keypress_key;
+  AceKeySym keypress_key;
   int keypress_key_state;
   SpoolerMessage message;
 } observer_status;
@@ -57,7 +57,7 @@ clear_keyboard(void)
 }
 
 static void
-keypress(KeySym ks, int key_state)
+keypress(AceKeySym ks, int key_state)
 {
   observer_status.keypress_called = 1;
   observer_status.keypress_key = ks;

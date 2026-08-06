@@ -16,17 +16,28 @@
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
-#include <X11/Xlib.h>
 
 #ifndef KEYBOARD_H
 #define KEYBOARD_H
 
-typedef void (*NonAceKeyHandler)(KeySym ks, int key_state);
+#ifdef USE_SDL
+#  include <SDL2/SDL.h>
+   /* Use SDL_Keycode as the key symbol type */
+   typedef SDL_Keycode AceKeySym;
+   /* Map SDL modifier flags to a simple bitmask the keyboard layer uses */
+#  define ACE_CTRL_MASK  KMOD_CTRL
+#else
+#  include <X11/Xlib.h>
+   typedef KeySym AceKeySym;
+#  define ACE_CTRL_MASK  ControlMask
+#endif
+
+typedef void (*NonAceKeyHandler)(AceKeySym ks, int key_state);
 
 extern void keyboard_init(NonAceKeyHandler non_ace_key_handler);
 extern unsigned char keyboard_get_keyport(int port);
 extern void keyboard_clear(void);
-extern void keyboard_keypress(KeySym ks, int key_state);
-extern void keyboard_keyrelease(KeySym ks, int key_state);
+extern void keyboard_keypress(AceKeySym ks, int key_state);
+extern void keyboard_keyrelease(AceKeySym ks, int key_state);
 
 #endif

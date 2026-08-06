@@ -18,9 +18,25 @@
  */
 #include <assert.h>
 #include <stdlib.h>
-#include <X11/keysym.h>
 
 #include "keyboard.h"
+
+#ifdef USE_SDL
+/* SDL keysym shims so test code reads naturally */
+#  define XK_3         SDLK_3
+#  define XK_7         SDLK_7
+#  define XK_A         SDLK_a      /* SDL lowercases everything */
+#  define XK_Tab       SDLK_TAB
+#  define XK_u         SDLK_u
+#  define XK_e         SDLK_e
+#  define XK_f         SDLK_f
+#  define XK_l         SDLK_l
+#  define XK_n         SDLK_n
+#  define XK_z         SDLK_z
+#  define XK_asterisk  SDLK_ASTERISK
+#  define XK_Sys_Req   SDLK_SYSREQ
+#  define ControlMask  ACE_CTRL_MASK
+#endif
 
 static void
 check_keyports(unsigned char *expected_keyports)
@@ -33,7 +49,7 @@ check_keyports(unsigned char *expected_keyports)
 
 static struct {
   int handler_called;
-  KeySym keySym;
+  AceKeySym keySym;
   int key_state;
 } non_ace_key_handler_status;
 
@@ -44,7 +60,7 @@ non_ace_key_handler_init(void)
 }
 
 static void
-non_ace_key_handler(KeySym ks, int key_state)
+non_ace_key_handler(AceKeySym ks, int key_state)
 {
   non_ace_key_handler_status.handler_called = 1;
   non_ace_key_handler_status.keySym = ks;
@@ -132,6 +148,22 @@ test_keyboard_keypress_key_not_found()
 static void
 test_keyboard_keypress_pass_to_non_ace_key_handler()
 {
+#ifdef USE_SDL
+  /* SDL: uppercase 'A' = SDLK_a + KMOD_SHIFT modifier */
+  unsigned char expected_keyports[8] = {
+    0xfe, 0xfe, 0xff, 0xff,
+    0xff, 0xff, 0xff, 0xff
+  };
+
+  non_ace_key_handler_init();
+  keyboard_init(non_ace_key_handler);
+  keyboard_keypress(XK_A, KMOD_SHIFT);
+  assert(non_ace_key_handler_status.handler_called);
+  assert(non_ace_key_handler_status.keySym == XK_A);
+  assert(non_ace_key_handler_status.key_state == KMOD_SHIFT);
+
+  check_keyports(expected_keyports);
+#else
   unsigned char expected_keyports[8] = {
     0xfe, 0xfe, 0xff, 0xff,
     0xff, 0xff, 0xff, 0xff
@@ -145,6 +177,7 @@ test_keyboard_keypress_pass_to_non_ace_key_handler()
   assert(non_ace_key_handler_status.key_state == 0);
 
   check_keyports(expected_keyports);
+#endif
 }
 
 static void
@@ -174,8 +207,13 @@ test_keyboard_keyrelease_from_single_key()
   };
 
   keyboard_init(non_ace_key_handler);
+#ifdef USE_SDL
+  keyboard_keypress(XK_A, KMOD_SHIFT);
+  keyboard_keyrelease(XK_A, KMOD_SHIFT);
+#else
   keyboard_keypress(XK_A, 0);
   keyboard_keyrelease(XK_A, 0);
+#endif
   check_keyports(expected_keyports);
 }
 
@@ -188,9 +226,15 @@ test_keyboard_keyrelease_from_single_key_with_multiple_pressed()
   };
 
   keyboard_init(non_ace_key_handler);
+#ifdef USE_SDL
+  keyboard_keypress(XK_A, KMOD_SHIFT);
+  keyboard_keypress(XK_Tab, 0);
+  keyboard_keyrelease(XK_A, KMOD_SHIFT);
+#else
   keyboard_keypress(XK_A, 0);
   keyboard_keypress(XK_Tab, 0);
   keyboard_keyrelease(XK_A, 0);
+#endif
   check_keyports(expected_keyports);
 }
 

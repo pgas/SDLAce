@@ -16,7 +16,7 @@
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
-#include <X11/Xlib.h>
+#include "keyboard.h"
 
 #ifndef SPOOLER_H
 #define SPOOLER_H
@@ -30,7 +30,7 @@ typedef enum SpoolerMessage {
 
 typedef void (*SpoolerObserver)(SpoolerMessage message);
 typedef void (*ClearKeyboardFunc)(void);
-typedef void (*KeypressFunc)(KeySym ks, int key_state);
+typedef void (*KeypressFunc)(AceKeySym ks, int key_state);
 
 extern void spooler_init(SpoolerObserver spooler_observer_func,
                          ClearKeyboardFunc clear_keyboard_func,

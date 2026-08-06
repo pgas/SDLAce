@@ -1,0 +1,49 @@
+Start testing: Aug 04 22:09 BST
+----------------------------------------------------------
+1/3 Testing: tape_test
+1/3 Test: tape_test
+Command: "/Users/pgas/emulator/xAce/build/tests/tape_test"
+Directory: /Users/pgas/emulator/xAce/tests
+"tape_test" start time: Aug 04 22:09 BST
+Output:
+----------------------------------------------------------
+Assertion failed: (block_correct(fp, mem+2000, 28)), function test_tape_save_p_truncate, file tape_test.c, line 387.
+<end of output>
+Test time =   0.00 sec
+----------------------------------------------------------
+Test Failed.
+"tape_test" end time: Aug 04 22:09 BST
+"tape_test" time elapsed: 00:00:00
+----------------------------------------------------------
+
+2/3 Testing: keyboard_test
+2/3 Test: keyboard_test
+Command: "/Users/pgas/emulator/xAce/build/tests/keyboard_test"
+Directory: /Users/pgas/emulator/xAce/tests
+"keyboard_test" start time: Aug 04 22:09 BST
+Output:
+----------------------------------------------------------
+<end of output>
+Test time =   0.02 sec
+----------------------------------------------------------
+Test Passed.
+"keyboard_test" end time: Aug 04 22:09 BST
+"keyboard_test" time elapsed: 00:00:00
+----------------------------------------------------------
+
+3/3 Testing: spooler_test
+3/3 Test: spooler_test
+Command: "/Users/pgas/emulator/xAce/build/tests/spooler_test"
+Directory: /Users/pgas/emulator/xAce/tests
+"spooler_test" start time: Aug 04 22:09 BST
+Output:
+----------------------------------------------------------
+<end of output>
+Test time =   0.01 sec
+----------------------------------------------------------
+Test Passed.
+"spooler_test" end time: Aug 04 22:09 BST
+"spooler_test" time elapsed: 00:00:00
+----------------------------------------------------------
+
+End testing: Aug 04 22:09 BST
