@@ -1,10 +1,10 @@
-/* sdlmain.c — SDL2 backend for xAce (Jupiter ACE emulator)
+/* sdlmain.c — SDL2 backend for SDLAce (Jupiter ACE emulator)
  *
  * Copyright (C) 1994 Ian Collier.
  * xz81 changes (C) 1995-6 Russell Marks.
  * xace changes (C) 1997 Edward Patel.
  * xace changes (C) 2010-12 Lawrence Woodman.
- * SDL2 macOS port (C) 2026
+ * SDLAce SDL2 port (C) 2026
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -33,6 +33,7 @@
 #include <unistd.h>
 
 #include <SDL2/SDL.h>
+#include <SDL2/SDL_ttf.h>
 
 #include "z80.h"
 #include "tape.h"
@@ -42,7 +43,10 @@
 #  include "macos_ui.h"
 #endif
 
-#define BORDER_WIDTH  (20 * SCALE)
+/* Top border is taller to fit the "JUPITER ACE" brand text + red stripes.
+ * The value here is at SCALE=2 (native 1× = half); we scale proportionally. */
+#define BORDER_SIDE   (16 * SCALE)   /* left/right/bottom border width */
+#define BORDER_TOP    (56 * SCALE)   /* top border (brand area) */
 
 /* --------------------------------------------------------------------------
  * Global state shared with the Z80 core
@@ -87,6 +91,10 @@ int refresh_screen = 1;
 static SDL_Window   *sdl_window   = NULL;
 static SDL_Renderer *sdl_renderer = NULL;
 static SDL_Texture  *sdl_texture  = NULL;
+
+/* Bezel font (SDL_ttf) */
+static TTF_Font *bezel_font_large = NULL;   /* "JUPITER ACE" */
+static TTF_Font *bezel_font_small = NULL;   /* "SDLAce" */
 
 /* Pixel buffer: 32-bit ARGB, hsize × vsize */
 static Uint32 *pixel_buf = NULL;
@@ -338,7 +346,7 @@ error:
 int
 main(int argc, char **argv)
 {
-  printf("xace: Jupiter ACE emulator v%s (by Edward Patel)\n", XACE_VERSION);
+  printf("SDLAce: Jupiter ACE emulator v%s\n", XACE_VERSION);
   printf("Keys:\n");
   printf("\tF1     - Delete Line\n");
   printf("\tF3     - Attach a tape image\n");
@@ -347,7 +355,7 @@ main(int argc, char **argv)
   printf("\tF11    - Spool from a file\n");
   printf("\tF2     - Reset\n");
   printf("\tEsc    - Break\n");
-  printf("\tCtrl-Q - Quit xAce\n");
+  printf("\tCtrl-Q - Quit SDLAce\n");
 
   loadrom(mem);
   tape_patches(mem);
@@ -479,11 +487,11 @@ startup(void)
   /* Use linear filtering when scaling the texture */
   SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "linear");
 
-  int win_w = hsize + BORDER_WIDTH * 2;
-  int win_h = vsize + BORDER_WIDTH * 2;
+  int win_w = hsize + BORDER_SIDE * 2;
+  int win_h = vsize + BORDER_TOP + BORDER_SIDE;
 
   sdl_window = SDL_CreateWindow(
-    "xAce — Jupiter ACE Emulator",
+    "SDLAce — Jupiter ACE Emulator",
     SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
     win_w, win_h,
     SDL_WINDOW_SHOWN | SDL_WINDOW_ALLOW_HIGHDPI | SDL_WINDOW_RESIZABLE
@@ -493,8 +501,8 @@ startup(void)
     exit(1);
   }
 
-  /* Don't allow the window to be shrunk below the natural ACE resolution */
-  SDL_SetWindowMinimumSize(sdl_window, hsize / 2, vsize / 2);
+  /* Don't allow the window to shrink below half the native ACE resolution */
+  SDL_SetWindowMinimumSize(sdl_window, hsize / 2 + BORDER_SIDE, vsize / 2 + BORDER_TOP / 2);
 
   sdl_renderer = SDL_CreateRenderer(sdl_window, -1,
     SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
@@ -538,11 +546,35 @@ startup(void)
   col_black = 0xFF000000;
 #endif
 
-  /* Disable key repeat — we handle it ourselves */
-  /* (SDL2 has no XAutoRepeatOff equivalent; key repeat is from
-     repeated SDL_KEYDOWN events which we simply don't accumulate.) */
-
   refresh_screen = 1;
+
+  /* ---- SDL_ttf for bezel text ---- */
+  if (TTF_Init() != 0) {
+    fprintf(stderr, "TTF_Init failed: %s\n", TTF_GetError());
+    /* Non-fatal: bezel will fall back to no text */
+  } else {
+    /* Try several common bold sans-serif font locations */
+    const char *font_candidates[] = {
+#ifdef __APPLE__
+      "/System/Library/Fonts/HelveticaNeue.ttc",
+      "/System/Library/Fonts/Helvetica.ttc",
+      "/System/Library/Fonts/ArialHB.ttc",
+#endif
+      /* Linux */
+      "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+      "/usr/share/fonts/dejavu/DejaVuSans-Bold.ttf",
+      "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf",
+      NULL
+    };
+    int i;
+    for (i = 0; font_candidates[i] && !bezel_font_large; i++) {
+      bezel_font_large = TTF_OpenFont(font_candidates[i], 28);
+      if (bezel_font_large)
+        bezel_font_small = TTF_OpenFont(font_candidates[i], 13);
+    }
+    if (!bezel_font_large)
+      fprintf(stderr, "SDLAce: no bezel font found, text will be absent\n");
+  }
 
 #ifdef __APPLE__
   /* Set up the native macOS menu bar (runs on main queue asynchronously) */
@@ -676,6 +708,91 @@ set_image_character(int x, int y, int inv, unsigned char *charbmap)
 }
 
 /* --------------------------------------------------------------------------
+ * Bezel drawing — Jupiter ACE-style cream case with red stripes
+ *
+ * Called every time the screen is refreshed.  All coordinates are in
+ * renderer output pixels (already HiDPI-aware because we use
+ * SDL_GetRendererOutputSize).
+ * -------------------------------------------------------------------------- */
+static void
+draw_bezel(int win_w, int win_h, int dst_x, int dst_y, int dst_w, int dst_h)
+{
+  /* ---- palette ---- */
+  /* Cream case colour matching the physical Jupiter ACE */
+  const Uint8 CR = 240, CG = 235, CB = 220;   /* cream */
+  const Uint8 RR = 196, RG =  30, RB =  30;   /* ACE red stripe */
+  const Uint8 TR =  30, TG =  30, TB =  30;   /* text / dark */
+
+  /* Fill the whole window with cream first */
+  SDL_SetRenderDrawColor(sdl_renderer, CR, CG, CB, 255);
+  SDL_RenderClear(sdl_renderer);
+
+  /* Thin dark outline around the screen area */
+  SDL_SetRenderDrawColor(sdl_renderer, TR, TG, TB, 255);
+  SDL_Rect outline = { dst_x - 2, dst_y - 2, dst_w + 4, dst_h + 4 };
+  SDL_RenderDrawRect(sdl_renderer, &outline);
+
+  /* ---- Top brand area: two red stripes + "JUPITER ACE" text ---- */
+  /* The top border is taller; we put stripes near its top and bottom edges. */
+  int stripe_h   = (int)(win_h * 0.012f);   /* ~1.2% of window height */
+  if (stripe_h < 3) stripe_h = 3;
+  int stripe_gap = stripe_h * 2;
+
+  /* Upper red stripe (near very top) */
+  SDL_SetRenderDrawColor(sdl_renderer, RR, RG, RB, 255);
+  SDL_Rect stripe_top = { 0, stripe_gap, win_w, stripe_h };
+  SDL_RenderFillRect(sdl_renderer, &stripe_top);
+
+  /* Lower red stripe (just above the screen) */
+  SDL_Rect stripe_bot = { 0, dst_y - stripe_gap - stripe_h, win_w, stripe_h };
+  SDL_RenderFillRect(sdl_renderer, &stripe_bot);
+
+  /* Text rendering */
+  if (bezel_font_large) {
+    SDL_Color dark = { TR, TG, TB, 255 };
+
+    /* "JUPITER ACE" centred between the two stripes */
+    SDL_Surface *surf = TTF_RenderUTF8_Blended(bezel_font_large, "JUPITER ACE", dark);
+    if (surf) {
+      SDL_Texture *tex = SDL_CreateTextureFromSurface(sdl_renderer, surf);
+      if (tex) {
+        int text_y_top    = stripe_gap + stripe_h + stripe_gap / 2;
+        int text_y_bottom = dst_y - stripe_gap - stripe_h - stripe_gap / 2;
+        int text_area_h   = text_y_bottom - text_y_top;
+        SDL_Rect tr = {
+          (win_w - surf->w) / 2,
+          text_y_top + (text_area_h - surf->h) / 2,
+          surf->w, surf->h
+        };
+        SDL_RenderCopy(sdl_renderer, tex, NULL, &tr);
+        SDL_DestroyTexture(tex);
+      }
+      SDL_FreeSurface(surf);
+    }
+  }
+
+  /* "SDLAce" small label in the bottom border */
+  if (bezel_font_small) {
+    SDL_Color mid = { 100, 95, 85, 255 };
+    SDL_Surface *surf = TTF_RenderUTF8_Blended(bezel_font_small, "SDLAce v" XACE_VERSION, mid);
+    if (surf) {
+      SDL_Texture *tex = SDL_CreateTextureFromSurface(sdl_renderer, surf);
+      if (tex) {
+        int bot_center = dst_y + dst_h + (win_h - (dst_y + dst_h)) / 2;
+        SDL_Rect tr = {
+          (win_w - surf->w) / 2,
+          bot_center - surf->h / 2,
+          surf->w, surf->h
+        };
+        SDL_RenderCopy(sdl_renderer, tex, NULL, &tr);
+        SDL_DestroyTexture(tex);
+      }
+      SDL_FreeSurface(surf);
+    }
+  }
+}
+
+/* --------------------------------------------------------------------------
  * Screen refresh
  * -------------------------------------------------------------------------- */
 void
@@ -717,35 +834,38 @@ refresh(void)
     /* Upload pixel_buf to texture */
     SDL_UpdateTexture(sdl_texture, NULL, pixel_buf, hsize * sizeof(Uint32));
 
-    /* Compute destination rect: scale the ACE screen to fill the window,
-     * keeping the original 4:3 aspect ratio, with a proportional border.
-     * Use SDL_RenderGetOutputSize so the rect is in renderer pixel coords
-     * (on Retina/HiDPI this differs from the window size in points). */
+    /* Compute layout in renderer output pixels (HiDPI-aware) */
     int win_w, win_h;
     SDL_GetRendererOutputSize(sdl_renderer, &win_w, &win_h);
 
-    /* Minimum border: 5% of smallest dimension */
-    int border = (win_w < win_h ? win_w : win_h) / 20;
-    if (border < 4) border = 4;
+    /* Scale factor from window logical points to renderer pixels
+     * (on Retina this is 2.0, on regular displays 1.0) */
+    int log_w, log_h;
+    SDL_GetWindowSize(sdl_window, &log_w, &log_h);
+    float px_ratio = (float)win_w / (float)log_w;
 
-    int avail_w = win_w - border * 2;
-    int avail_h = win_h - border * 2;
+    /* Border sizes in renderer pixels */
+    int bside = (int)(BORDER_SIDE * px_ratio);
+    int btop  = (int)(BORDER_TOP  * px_ratio);
 
-    /* Scale to fit available area preserving aspect ratio */
+    int avail_w = win_w - bside * 2;
+    int avail_h = win_h - btop - bside;
+
+    /* Scale to fill available area, preserving 4:3 ACE aspect ratio */
     float scale_x = (float)avail_w / hsize;
     float scale_y = (float)avail_h / vsize;
     float scale   = (scale_x < scale_y) ? scale_x : scale_y;
 
     int dst_w = (int)(hsize * scale);
     int dst_h = (int)(vsize * scale);
+    /* Centre horizontally, push to bottom of top-brand area */
     int dst_x = (win_w - dst_w) / 2;
-    int dst_y = (win_h - dst_h) / 2;
+    int dst_y = btop + (avail_h - dst_h) / 2;
 
     SDL_Rect dst = { dst_x, dst_y, dst_w, dst_h };
 
-    /* White border background */
-    SDL_SetRenderDrawColor(sdl_renderer, 255, 255, 255, 255);
-    SDL_RenderClear(sdl_renderer);
+    /* Draw the Jupiter ACE bezel (cream + red stripes + text) */
+    draw_bezel(win_w, win_h, dst_x, dst_y, dst_w, dst_h);
 
     SDL_RenderCopy(sdl_renderer, sdl_texture, NULL, &dst);
     SDL_RenderPresent(sdl_renderer);
@@ -762,6 +882,9 @@ closedown(void)
 {
   tape_clear_observers();
   free(pixel_buf);
+  if (bezel_font_large) TTF_CloseFont(bezel_font_large);
+  if (bezel_font_small) TTF_CloseFont(bezel_font_small);
+  TTF_Quit();
   if (sdl_texture)  SDL_DestroyTexture(sdl_texture);
   if (sdl_renderer) SDL_DestroyRenderer(sdl_renderer);
   if (sdl_window)   SDL_DestroyWindow(sdl_window);

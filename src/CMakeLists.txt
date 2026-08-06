@@ -1,72 +1,67 @@
 add_definitions(-DSCALE=2 -DWHITE_ON_BLACK -DXACE_VERSION=\"0.5\")
 
-if(USE_SDL)
-  # ---- SDL2 / macOS native build ----------------------------------------
+# ---- SDL2 build (only backend) ----------------------------------------
 
-  # Locate SDL2 headers and library directly (avoids SDL2main confusion)
-  find_library(SDL2_LIB SDL2
-    HINTS /opt/homebrew/lib /usr/local/lib
-    REQUIRED)
-  find_path(SDL2_INCLUDE_DIR SDL2/SDL.h
-    HINTS /opt/homebrew/include /usr/local/include
-    REQUIRED)
-  message(STATUS "SDL2 lib:     ${SDL2_LIB}")
-  message(STATUS "SDL2 include: ${SDL2_INCLUDE_DIR}")
+# Locate SDL2 headers and library directly (avoids SDL2main confusion)
+find_library(SDL2_LIB SDL2
+  HINTS /opt/homebrew/lib /usr/local/lib
+  REQUIRED)
+find_path(SDL2_INCLUDE_DIR SDL2/SDL.h
+  HINTS /opt/homebrew/include /usr/local/include
+  REQUIRED)
 
-  if(APPLE)
-    set(PLATFORM_SOURCES macos_ui.m)
-  else()
-    set(PLATFORM_SOURCES "")
-  endif()
+# Locate SDL2_ttf for bezel text rendering
+find_library(SDL2_TTF_LIB SDL2_ttf
+  HINTS /opt/homebrew/lib /usr/local/lib
+  REQUIRED)
+find_path(SDL2_TTF_INCLUDE_DIR SDL2/SDL_ttf.h
+  HINTS /opt/homebrew/include /usr/local/include
+  REQUIRED)
 
-  add_executable(xace
-    sdlmain.c
-    z80.c
-    tape.c
-    keyboard_sdl.c
-    spooler.c
-    ${PLATFORM_SOURCES}
-  )
+message(STATUS "SDL2     lib: ${SDL2_LIB}")
+message(STATUS "SDL2_ttf lib: ${SDL2_TTF_LIB}")
 
-  target_compile_definitions(xace PRIVATE USE_SDL SDL_MAIN_HANDLED)
-  target_include_directories(xace PRIVATE ${SDL2_INCLUDE_DIR})
-  target_link_libraries(xace PRIVATE ${SDL2_LIB})
-
-  if(APPLE)
-    # Compile the Objective-C file correctly
-    set_source_files_properties(macos_ui.m PROPERTIES LANGUAGE OBJC)
-
-    # Cocoa for NSMenu, NSOpenPanel, dispatch queues
-    target_link_libraries(xace PRIVATE "-framework Cocoa")
-
-    # Create a proper macOS .app bundle
-    set_target_properties(xace PROPERTIES
-      MACOSX_BUNDLE TRUE
-      MACOSX_BUNDLE_BUNDLE_NAME "xAce"
-      MACOSX_BUNDLE_GUI_IDENTIFIER "org.xace.emulator"
-      MACOSX_BUNDLE_BUNDLE_VERSION "0.5"
-      MACOSX_BUNDLE_SHORT_VERSION_STRING "0.5"
-      OUTPUT_NAME "xAce"
-    )
-
-    # Copy the ROM into the bundle's Resources directory
-    set(ROM_SRC "${CMAKE_SOURCE_DIR}/ace.rom")
-    set_source_files_properties(${ROM_SRC} PROPERTIES
-      MACOSX_PACKAGE_LOCATION "Resources"
-    )
-    target_sources(xace PRIVATE ${ROM_SRC})
-  endif()
-
+if(APPLE)
+  set(PLATFORM_SOURCES macos_ui.m)
 else()
-  # ---- Original X11 build -----------------------------------------------
-  add_executable(xace
-    xmain.c
-    z80.c
-    tape.c
-    keyboard.c
-    spooler.c
-  )
-  target_link_libraries(xace PRIVATE X11 Xext)
+  set(PLATFORM_SOURCES "")
 endif()
 
-install(TARGETS xace DESTINATION bin)
+add_executable(sdlace
+  sdlmain.c
+  z80.c
+  tape.c
+  keyboard_sdl.c
+  spooler.c
+  ${PLATFORM_SOURCES}
+)
+
+target_compile_definitions(sdlace PRIVATE USE_SDL SDL_MAIN_HANDLED)
+target_include_directories(sdlace PRIVATE
+  ${SDL2_INCLUDE_DIR}
+  ${SDL2_TTF_INCLUDE_DIR}
+)
+target_link_libraries(sdlace PRIVATE ${SDL2_LIB} ${SDL2_TTF_LIB})
+
+if(APPLE)
+  set_source_files_properties(macos_ui.m PROPERTIES LANGUAGE OBJC)
+  target_link_libraries(sdlace PRIVATE "-framework Cocoa")
+
+  set_target_properties(sdlace PROPERTIES
+    MACOSX_BUNDLE TRUE
+    MACOSX_BUNDLE_BUNDLE_NAME "SDLAce"
+    MACOSX_BUNDLE_GUI_IDENTIFIER "org.sdlace.emulator"
+    MACOSX_BUNDLE_BUNDLE_VERSION "0.5"
+    MACOSX_BUNDLE_SHORT_VERSION_STRING "0.5"
+    OUTPUT_NAME "SDLAce"
+  )
+
+  # Bundle the ROM
+  set(ROM_SRC "${CMAKE_SOURCE_DIR}/ace.rom")
+  set_source_files_properties(${ROM_SRC} PROPERTIES
+    MACOSX_PACKAGE_LOCATION "Resources"
+  )
+  target_sources(sdlace PRIVATE ${ROM_SRC})
+endif()
+
+install(TARGETS sdlace DESTINATION bin)
