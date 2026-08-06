@@ -38,6 +38,9 @@
 #include "tape.h"
 #include "keyboard.h"
 #include "spooler.h"
+#ifdef __APPLE__
+#  include "macos_ui.h"
+#endif
 
 #define BORDER_WIDTH  (20 * SCALE)
 
@@ -101,6 +104,41 @@ void startup(void);
 void check_events(void);
 void refresh(void);
 void closedown(void);
+
+/* Custom SDL event type for macOS menu actions (registered at startup) */
+static Uint32 ace_sdl_event_type = (Uint32)-1;
+
+/* --------------------------------------------------------------------------
+ * Paste from clipboard — writes clipboard text to a temp file, then feeds
+ * it through the existing spooler (press/release timing is handled there).
+ * The temp file is unlink'd immediately after open; the inode stays alive
+ * until the spooler fclose's it (standard POSIX behaviour).
+ * -------------------------------------------------------------------------- */
+static void
+paste_from_clipboard(void)
+{
+  char *text;
+  char tmppath[256];
+  FILE *f;
+
+  if (spooler_active()) return;  /* already spooling */
+
+  text = SDL_GetClipboardText();
+  if (!text || !*text) {
+    if (text) SDL_free(text);
+    return;
+  }
+
+  snprintf(tmppath, sizeof(tmppath), "/tmp/.xace_paste_%d", (int)getpid());
+  f = fopen(tmppath, "w");
+  if (f) {
+    fputs(text, f);
+    fclose(f);
+    spooler_open(tmppath);
+    unlink(tmppath);   /* safe: spooler holds the fd */
+  }
+  SDL_free(text);
+}
 
 /* --------------------------------------------------------------------------
  * Signal / timer helpers
@@ -435,6 +473,9 @@ startup(void)
     exit(1);
   }
 
+  /* Register one custom event type for macOS menu actions */
+  ace_sdl_event_type = SDL_RegisterEvents(1);
+
   /* Use linear filtering when scaling the texture */
   SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "linear");
 
@@ -502,6 +543,11 @@ startup(void)
      repeated SDL_KEYDOWN events which we simply don't accumulate.) */
 
   refresh_screen = 1;
+
+#ifdef __APPLE__
+  /* Set up the native macOS menu bar (runs on main queue asynchronously) */
+  macos_setup_menu(ace_sdl_event_type);
+#endif
 }
 
 /* --------------------------------------------------------------------------
@@ -513,6 +559,45 @@ check_events(void)
   SDL_Event ev;
 
   while (SDL_PollEvent(&ev)) {
+    /* Custom event from macOS menu */
+    if (ev.type == ace_sdl_event_type) {
+      char *path = (char *)ev.user.data1;  /* may be NULL */
+      switch (ev.user.code) {
+        case ACE_EVENT_DELETE_LINE:
+          keyboard_keypress(SDLK_F1, 0);
+          keyboard_keyrelease(SDLK_F1, 0);
+          break;
+        case ACE_EVENT_ATTACH_TAPE:
+          if (path) { tape_attach(path); free(path); }
+          break;
+        case ACE_EVENT_INVERSE_VIDEO:
+          keyboard_keypress(SDLK_F4, 0);
+          keyboard_keyrelease(SDLK_F4, 0);
+          break;
+        case ACE_EVENT_GRAPHICS:
+          keyboard_keypress(SDLK_F9, 0);
+          keyboard_keyrelease(SDLK_F9, 0);
+          break;
+        case ACE_EVENT_SPOOL:
+          if (path) { spooler_open(path); free(path); }
+          break;
+        case ACE_EVENT_RESET:
+          reset_ace = 1;
+          memset(mem + 8192, 0xff, 57344);
+          refresh_screen = 1;
+          keyboard_clear();
+          break;
+        case ACE_EVENT_BREAK:
+          keyboard_keypress(SDLK_ESCAPE, 0);
+          keyboard_keyrelease(SDLK_ESCAPE, 0);
+          break;
+        case ACE_EVENT_PASTE:
+          paste_from_clipboard();
+          break;
+      }
+      continue;
+    }
+
     switch (ev.type) {
       case SDL_QUIT:
         tape_detach();
@@ -528,13 +613,18 @@ check_events(void)
           refresh_screen = 1;
         break;
 
-      case SDL_KEYDOWN:
-        if (!spooler_active()) {
-          SDL_Keycode ks    = ev.key.keysym.sym;
-          int         mods  = (int)ev.key.keysym.mod;
-          keyboard_keypress(ks, mods);
+      case SDL_KEYDOWN: {
+        SDL_Keycode ks   = ev.key.keysym.sym;
+        int         mods = (int)ev.key.keysym.mod;
+        /* Cmd+V — paste from host clipboard */
+        if (ks == SDLK_v && (mods & KMOD_GUI)) {
+          paste_from_clipboard();
+          break;
         }
+        if (!spooler_active())
+          keyboard_keypress(ks, mods);
         break;
+      }
 
       case SDL_KEYUP:
         if (!spooler_active()) {

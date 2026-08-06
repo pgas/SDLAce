@@ -2,6 +2,11 @@ cmake_minimum_required(VERSION 3.14)
 
 project(xAce)
 
+# Enable Objective-C for the macOS native UI (macos_ui.m)
+if(APPLE)
+  enable_language(OBJC)
+endif()
+
 enable_testing()
 
 # Build backend selection: SDL (default on macOS) or X11

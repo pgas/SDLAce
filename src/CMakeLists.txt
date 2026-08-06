@@ -2,7 +2,22 @@ add_definitions(-DSCALE=2 -DWHITE_ON_BLACK -DXACE_VERSION=\"0.5\")
 
 if(USE_SDL)
   # ---- SDL2 / macOS native build ----------------------------------------
-  find_package(SDL2 REQUIRED CONFIG QUIET)
+
+  # Locate SDL2 headers and library directly (avoids SDL2main confusion)
+  find_library(SDL2_LIB SDL2
+    HINTS /opt/homebrew/lib /usr/local/lib
+    REQUIRED)
+  find_path(SDL2_INCLUDE_DIR SDL2/SDL.h
+    HINTS /opt/homebrew/include /usr/local/include
+    REQUIRED)
+  message(STATUS "SDL2 lib:     ${SDL2_LIB}")
+  message(STATUS "SDL2 include: ${SDL2_INCLUDE_DIR}")
+
+  if(APPLE)
+    set(PLATFORM_SOURCES macos_ui.m)
+  else()
+    set(PLATFORM_SOURCES "")
+  endif()
 
   add_executable(xace
     sdlmain.c
@@ -10,24 +25,19 @@ if(USE_SDL)
     tape.c
     keyboard_sdl.c
     spooler.c
+    ${PLATFORM_SOURCES}
   )
 
-  target_compile_definitions(xace PRIVATE USE_SDL)
-
-  # SDL2 imported targets differ slightly between cmake configs
-  if(TARGET SDL2::SDL2)
-    target_link_libraries(xace PRIVATE SDL2::SDL2 SDL2::SDL2main)
-  else()
-    # Fallback: use sdl2-config variables
-    find_package(PkgConfig REQUIRED)
-    pkg_check_modules(SDL2 REQUIRED sdl2)
-    target_include_directories(xace PRIVATE ${SDL2_INCLUDE_DIRS})
-    target_link_libraries(xace PRIVATE ${SDL2_LIBRARIES})
-  endif()
+  target_compile_definitions(xace PRIVATE USE_SDL SDL_MAIN_HANDLED)
+  target_include_directories(xace PRIVATE ${SDL2_INCLUDE_DIR})
+  target_link_libraries(xace PRIVATE ${SDL2_LIB})
 
   if(APPLE)
-    # Silence SDL's redefine of main on macOS
-    target_compile_definitions(xace PRIVATE SDL_MAIN_HANDLED)
+    # Compile the Objective-C file correctly
+    set_source_files_properties(macos_ui.m PROPERTIES LANGUAGE OBJC)
+
+    # Cocoa for NSMenu, NSOpenPanel, dispatch queues
+    target_link_libraries(xace PRIVATE "-framework Cocoa")
 
     # Create a proper macOS .app bundle
     set_target_properties(xace PROPERTIES
