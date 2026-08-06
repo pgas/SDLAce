@@ -629,9 +629,10 @@ refresh(void)
 
     /* Compute destination rect: scale the ACE screen to fill the window,
      * keeping the original 4:3 aspect ratio, with a proportional border.
-     * The border is 5% of the smaller window dimension on each side. */
+     * Use SDL_RenderGetOutputSize so the rect is in renderer pixel coords
+     * (on Retina/HiDPI this differs from the window size in points). */
     int win_w, win_h;
-    SDL_GetWindowSize(sdl_window, &win_w, &win_h);
+    SDL_GetRendererOutputSize(sdl_renderer, &win_w, &win_h);
 
     /* Minimum border: 5% of smallest dimension */
     int border = (win_w < win_h ? win_w : win_h) / 20;
