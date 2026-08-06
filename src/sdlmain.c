@@ -435,6 +435,9 @@ startup(void)
     exit(1);
   }
 
+  /* Use linear filtering when scaling the texture */
+  SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "linear");
+
   int win_w = hsize + BORDER_WIDTH * 2;
   int win_h = vsize + BORDER_WIDTH * 2;
 
@@ -442,12 +445,15 @@ startup(void)
     "xAce — Jupiter ACE Emulator",
     SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
     win_w, win_h,
-    SDL_WINDOW_SHOWN | SDL_WINDOW_ALLOW_HIGHDPI
+    SDL_WINDOW_SHOWN | SDL_WINDOW_ALLOW_HIGHDPI | SDL_WINDOW_RESIZABLE
   );
   if (!sdl_window) {
     fprintf(stderr, "SDL_CreateWindow failed: %s\n", SDL_GetError());
     exit(1);
   }
+
+  /* Don't allow the window to be shrunk below the natural ACE resolution */
+  SDL_SetWindowMinimumSize(sdl_window, hsize / 2, vsize / 2);
 
   sdl_renderer = SDL_CreateRenderer(sdl_window, -1,
     SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
@@ -516,7 +522,9 @@ check_events(void)
 
       case SDL_WINDOWEVENT:
         if (ev.window.event == SDL_WINDOWEVENT_EXPOSED ||
-            ev.window.event == SDL_WINDOWEVENT_RESTORED)
+            ev.window.event == SDL_WINDOWEVENT_RESTORED ||
+            ev.window.event == SDL_WINDOWEVENT_RESIZED ||
+            ev.window.event == SDL_WINDOWEVENT_SIZE_CHANGED)
           refresh_screen = 1;
         break;
 
@@ -616,17 +624,38 @@ refresh(void)
   }
 
   if (xmax >= xmin && ymax >= ymin) {
-    /* Upload changed region of pixel_buf to the texture */
+    /* Upload pixel_buf to texture */
     SDL_UpdateTexture(sdl_texture, NULL, pixel_buf, hsize * sizeof(Uint32));
 
-    /* Render: white border + inner screen */
+    /* Compute destination rect: scale the ACE screen to fill the window,
+     * keeping the original 4:3 aspect ratio, with a proportional border.
+     * The border is 5% of the smaller window dimension on each side. */
+    int win_w, win_h;
+    SDL_GetWindowSize(sdl_window, &win_w, &win_h);
+
+    /* Minimum border: 5% of smallest dimension */
+    int border = (win_w < win_h ? win_w : win_h) / 20;
+    if (border < 4) border = 4;
+
+    int avail_w = win_w - border * 2;
+    int avail_h = win_h - border * 2;
+
+    /* Scale to fit available area preserving aspect ratio */
+    float scale_x = (float)avail_w / hsize;
+    float scale_y = (float)avail_h / vsize;
+    float scale   = (scale_x < scale_y) ? scale_x : scale_y;
+
+    int dst_w = (int)(hsize * scale);
+    int dst_h = (int)(vsize * scale);
+    int dst_x = (win_w - dst_w) / 2;
+    int dst_y = (win_h - dst_h) / 2;
+
+    SDL_Rect dst = { dst_x, dst_y, dst_w, dst_h };
+
+    /* White border background */
     SDL_SetRenderDrawColor(sdl_renderer, 255, 255, 255, 255);
     SDL_RenderClear(sdl_renderer);
 
-    SDL_Rect dst = {
-      BORDER_WIDTH, BORDER_WIDTH,
-      hsize, vsize
-    };
     SDL_RenderCopy(sdl_renderer, sdl_texture, NULL, &dst);
     SDL_RenderPresent(sdl_renderer);
   }
