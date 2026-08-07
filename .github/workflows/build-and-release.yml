@@ -1,0 +1,90 @@
+name: Build and Release
+
+on:
+  push:
+    branches:
+      - master
+    tags:
+      - 'v*'
+  pull_request:
+    branches:
+      - master
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Install dependencies (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libsdl2-dev libsdl2-ttf-dev libgtk-3-dev pkg-config cmake
+
+      - name: Install dependencies (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          brew update
+          brew install sdl2 sdl2_ttf cmake
+
+      - name: Configure CMake
+        run: cmake -B build -S .
+
+      - name: Build
+        run: cmake --build build --config Release
+
+      - name: Archive Linux Artifact
+        if: runner.os == 'Linux'
+        run: |
+          mkdir -p sdlace-linux
+          cp build/src/sdlace sdlace-linux/
+          cp ace.rom sdlace-linux/
+          tar -czvf sdlace-linux.tar.gz sdlace-linux
+
+      - name: Archive macOS Artifact
+        if: runner.os == 'macOS'
+        run: |
+          cd build/src
+          zip -r ../../sdlace-macos.zip SDLAce.app
+
+      - name: Upload Linux Artifact
+        if: runner.os == 'Linux'
+        uses: actions/upload-artifact@v4
+        with:
+          name: sdlace-linux
+          path: sdlace-linux.tar.gz
+
+      - name: Upload macOS Artifact
+        if: runner.os == 'macOS'
+        uses: actions/upload-artifact@v4
+        with:
+          name: sdlace-macos
+          path: sdlace-macos.zip
+
+  release:
+    name: Create Release
+    needs: build
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    permissions:
+      contents: write
+    steps:
+      - name: Download all workflow run artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            artifacts/sdlace-linux/sdlace-linux.tar.gz
+            artifacts/sdlace-macos/sdlace-macos.zip
