@@ -1,3 +1,0 @@
-keyboard_test 1 0.270033
-spooler_test 1 0.218898
----
