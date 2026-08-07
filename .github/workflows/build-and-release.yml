@@ -17,7 +17,13 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-latest, macos-latest]
+        include:
+          - os: ubuntu-latest
+            artifact: sdlace-linux-x86_64
+          - os: ubuntu-24.04-arm
+            artifact: sdlace-linux-arm64
+          - os: macos-latest
+            artifact: sdlace-macos
 
     steps:
       - name: Checkout Code
@@ -44,10 +50,10 @@ jobs:
       - name: Archive Linux Artifact
         if: runner.os == 'Linux'
         run: |
-          mkdir -p sdlace-linux
-          cp build/src/sdlace sdlace-linux/
-          cp ace.rom sdlace-linux/
-          tar -czvf sdlace-linux.tar.gz sdlace-linux
+          mkdir -p ${{ matrix.artifact }}
+          cp build/src/sdlace ${{ matrix.artifact }}/
+          cp ace.rom ${{ matrix.artifact }}/
+          tar -czvf ${{ matrix.artifact }}.tar.gz ${{ matrix.artifact }}
 
       - name: Archive macOS Artifact
         if: runner.os == 'macOS'
@@ -59,8 +65,8 @@ jobs:
         if: runner.os == 'Linux'
         uses: actions/upload-artifact@v4
         with:
-          name: sdlace-linux
-          path: sdlace-linux.tar.gz
+          name: ${{ matrix.artifact }}
+          path: ${{ matrix.artifact }}.tar.gz
 
       - name: Upload macOS Artifact
         if: runner.os == 'macOS'
@@ -68,6 +74,13 @@ jobs:
         with:
           name: sdlace-macos
           path: build/src/SDLAce.app
+
+      - name: Upload macOS Artifact for Release
+        if: runner.os == 'macOS'
+        uses: actions/upload-artifact@v4
+        with:
+          name: sdlace-macos-release
+          path: sdlace-macos.zip
 
   release:
     name: Create Release
@@ -86,5 +99,6 @@ jobs:
         uses: softprops/action-gh-release@v1
         with:
           files: |
-            artifacts/sdlace-linux/sdlace-linux.tar.gz
-            artifacts/sdlace-macos/sdlace-macos.zip
+            artifacts/sdlace-linux-x86_64/sdlace-linux-x86_64.tar.gz
+            artifacts/sdlace-linux-arm64/sdlace-linux-arm64.tar.gz
+            artifacts/sdlace-macos-release/sdlace-macos.zip
