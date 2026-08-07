@@ -273,6 +273,13 @@ keyboard_get_shifted_symbol(AceKeySym ks,
 void
 keyboard_keypress(AceKeySym ks, int key_state)
 {
+  if (ks >= 'A' && ks <= 'Z') {
+    ks = ks - 'A' + 'a';
+    key_state |= KMOD_SHIFT;
+  } else if (ks == '\n') {
+    ks = SDLK_RETURN;
+  }
+  
   if (!(key_state & ACE_CTRL_MASK)) {
     if (key_state & (KMOD_SHIFT | KMOD_CAPS)) {
       if (is_letter_key(ks)) {
@@ -305,6 +312,13 @@ keyboard_keypress(AceKeySym ks, int key_state)
 void
 keyboard_keyrelease(AceKeySym ks, int key_state)
 {
+  if (ks >= 'A' && ks <= 'Z') {
+    ks = ks - 'A' + 'a';
+    key_state |= KMOD_SHIFT;
+  } else if (ks == '\n') {
+    ks = SDLK_RETURN;
+  }
+
   if (!(key_state & ACE_CTRL_MASK)) {
     if (key_state & (KMOD_SHIFT | KMOD_CAPS)) {
       if (is_letter_key(ks)) {

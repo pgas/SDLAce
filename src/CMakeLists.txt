@@ -1,3 +1,8 @@
+
+cmake_minimum_required(VERSION 3.10)
+
+project("SDLAce")
+
 add_definitions(-DSCALE=2 -DWHITE_ON_BLACK -DXACE_VERSION=\"0.5\")
 
 # ---- SDL2 build (only backend) ----------------------------------------
@@ -24,7 +29,9 @@ message(STATUS "SDL2_ttf lib: ${SDL2_TTF_LIB}")
 if(APPLE)
   set(PLATFORM_SOURCES macos_ui.m)
 else()
-  set(PLATFORM_SOURCES "")
+  find_package(PkgConfig REQUIRED)
+  pkg_check_modules(GTK3 REQUIRED IMPORTED_TARGET gtk+-3.0)
+  set(PLATFORM_SOURCES linux_ui.c)
 endif()
 
 add_executable(sdlace
@@ -43,6 +50,9 @@ target_include_directories(sdlace PRIVATE
 )
 target_link_libraries(sdlace PRIVATE ${SDL2_LIB} ${SDL2_TTF_LIB})
 
+if(NOT APPLE)
+  target_link_libraries(sdlace PRIVATE PkgConfig::GTK3)
+endif()
 if(APPLE)
   set_source_files_properties(macos_ui.m PROPERTIES LANGUAGE OBJC)
   target_link_libraries(sdlace PRIVATE "-framework Cocoa")

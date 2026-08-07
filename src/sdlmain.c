@@ -39,8 +39,11 @@
 #include "tape.h"
 #include "keyboard.h"
 #include "spooler.h"
+#include "ui_events.h"
 #ifdef __APPLE__
 #  include "macos_ui.h"
+#else
+#  include "linux_ui.h"
 #endif
 
 /* Top border is taller to fit the "JUPITER ACE" brand text + red stripes.
@@ -452,6 +455,9 @@ fix_tstates(void)
 /* --------------------------------------------------------------------------
  * Interrupt handler (called by Z80 core each instruction)
  * -------------------------------------------------------------------------- */
+static int pending_release_key = 0;
+static int pending_release_timer = 0;
+
 void
 do_interrupt(void)
 {
@@ -467,6 +473,16 @@ do_interrupt(void)
     }
 
     check_events();
+    if (pending_release_timer > 0) {
+      pending_release_timer--;
+      if (pending_release_timer == 0 && pending_release_key != 0) {
+        keyboard_keyrelease(pending_release_key, 0);
+        pending_release_key = 0;
+      }
+    }
+#ifndef __APPLE__
+    linux_pump_events();
+#endif
     interrupted = 0;
   }
 }
@@ -491,12 +507,18 @@ startup(void)
   int win_w = hsize + BORDER_SIDE * 2;
   int win_h = vsize + BORDER_TOP + BORDER_SIDE;
 
+#ifndef __APPLE__
+  void* xid = linux_create_window(win_w, win_h, "SDLAce — Jupiter ACE Emulator", ace_sdl_event_type);
+  sdl_window = SDL_CreateWindowFrom(xid);
+#else
   sdl_window = SDL_CreateWindow(
     "SDLAce — Jupiter ACE Emulator",
     SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
     win_w, win_h,
     SDL_WINDOW_SHOWN | SDL_WINDOW_ALLOW_HIGHDPI | SDL_WINDOW_RESIZABLE
   );
+#endif
+
   if (!sdl_window) {
     fprintf(stderr, "SDL_CreateWindow failed: %s\n", SDL_GetError());
     exit(1);
@@ -613,18 +635,21 @@ check_events(void)
       switch (ev.user.code) {
         case ACE_EVENT_DELETE_LINE:
           keyboard_keypress(SDLK_F1, 0);
-          keyboard_keyrelease(SDLK_F1, 0);
+          pending_release_key = SDLK_F1;
+          pending_release_timer = 10;
           break;
         case ACE_EVENT_ATTACH_TAPE:
           if (path) { tape_attach(path); free(path); }
           break;
         case ACE_EVENT_INVERSE_VIDEO:
           keyboard_keypress(SDLK_F4, 0);
-          keyboard_keyrelease(SDLK_F4, 0);
+          pending_release_key = SDLK_F4;
+          pending_release_timer = 10;
           break;
         case ACE_EVENT_GRAPHICS:
           keyboard_keypress(SDLK_F9, 0);
-          keyboard_keyrelease(SDLK_F9, 0);
+          pending_release_key = SDLK_F9;
+          pending_release_timer = 10;
           break;
         case ACE_EVENT_SPOOL:
           if (path) { spooler_open(path); free(path); }
@@ -637,7 +662,8 @@ check_events(void)
           break;
         case ACE_EVENT_BREAK:
           keyboard_keypress(SDLK_ESCAPE, 0);
-          keyboard_keyrelease(SDLK_ESCAPE, 0);
+          pending_release_key = SDLK_ESCAPE;
+          pending_release_timer = 10;
           break;
         case ACE_EVENT_PASTE:
           paste_from_clipboard();
@@ -664,8 +690,8 @@ check_events(void)
       case SDL_KEYDOWN: {
         SDL_Keycode ks   = ev.key.keysym.sym;
         int         mods = (int)ev.key.keysym.mod;
-        /* Cmd+V — paste from host clipboard */
-        if (ks == SDLK_v && (mods & KMOD_GUI)) {
+        /* Cmd+V (macOS) or Ctrl+V (Linux) — paste from host clipboard */
+        if (ks == SDLK_v && (mods & (KMOD_GUI | KMOD_CTRL))) {
           paste_from_clipboard();
           break;
         }
@@ -680,6 +706,12 @@ check_events(void)
           int         mods = (int)ev.key.keysym.mod;
           keyboard_keyrelease(ks, mods);
         }
+        break;
+
+      case SDL_MOUSEBUTTONDOWN:
+#ifndef __APPLE__
+        linux_cancel_menu();
+#endif
         break;
 
       default:
