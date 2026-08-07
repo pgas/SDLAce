@@ -67,7 +67,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: sdlace-macos
-          path: sdlace-macos.zip
+          path: build/src/SDLAce.app
 
   release:
     name: Create Release

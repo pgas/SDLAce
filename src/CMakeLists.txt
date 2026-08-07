@@ -34,18 +34,27 @@ else()
   set(PLATFORM_SOURCES linux_ui.c)
 endif()
 
-if(APPLE)
-  set(CMAKE_MACOSX_BUNDLE TRUE)
-endif()
 
-add_executable(sdlace
-  sdlmain.c
-  z80.c
-  tape.c
-  keyboard_sdl.c
-  spooler.c
-  ${PLATFORM_SOURCES}
-)
+
+if(APPLE)
+  add_executable(sdlace MACOSX_BUNDLE
+    sdlmain.c
+    z80.c
+    tape.c
+    keyboard_sdl.c
+    spooler.c
+    ${PLATFORM_SOURCES}
+  )
+else()
+  add_executable(sdlace
+    sdlmain.c
+    z80.c
+    tape.c
+    keyboard_sdl.c
+    spooler.c
+    ${PLATFORM_SOURCES}
+  )
+endif()
 
 target_compile_definitions(sdlace PRIVATE USE_SDL SDL_MAIN_HANDLED)
 target_include_directories(sdlace PRIVATE
