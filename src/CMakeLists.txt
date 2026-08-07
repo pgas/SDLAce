@@ -34,6 +34,10 @@ else()
   set(PLATFORM_SOURCES linux_ui.c)
 endif()
 
+if(APPLE)
+  set(CMAKE_MACOSX_BUNDLE TRUE)
+endif()
+
 add_executable(sdlace
   sdlmain.c
   z80.c
@@ -58,7 +62,6 @@ if(APPLE)
   target_link_libraries(sdlace PRIVATE "-framework Cocoa")
 
   set_target_properties(sdlace PROPERTIES
-    MACOSX_BUNDLE TRUE
     MACOSX_BUNDLE_BUNDLE_NAME "SDLAce"
     MACOSX_BUNDLE_GUI_IDENTIFIER "org.sdlace.emulator"
     MACOSX_BUNDLE_BUNDLE_VERSION "0.5"
