@@ -75,15 +75,21 @@ if(APPLE)
     MACOSX_BUNDLE_GUI_IDENTIFIER "org.sdlace.emulator"
     MACOSX_BUNDLE_BUNDLE_VERSION "0.6"
     MACOSX_BUNDLE_SHORT_VERSION_STRING "0.6"
+    MACOSX_BUNDLE_ICON_FILE "sdlace.icns"
     OUTPUT_NAME "SDLAce"
   )
 
-  # Bundle the ROM
+  # Bundle the ROM and Icon
   set(ROM_SRC "${CMAKE_SOURCE_DIR}/ace.rom")
-  set_source_files_properties(${ROM_SRC} PROPERTIES
+  set(ICON_SRC "${CMAKE_SOURCE_DIR}/images/sdlace.icns")
+  set_source_files_properties(${ROM_SRC} ${ICON_SRC} PROPERTIES
     MACOSX_PACKAGE_LOCATION "Resources"
   )
-  target_sources(sdlace PRIVATE ${ROM_SRC})
+  target_sources(sdlace PRIVATE ${ROM_SRC} ${ICON_SRC})
 endif()
 
-install(TARGETS sdlace DESTINATION bin)
+if(APPLE)
+  install(TARGETS sdlace BUNDLE DESTINATION .)
+else()
+  install(TARGETS sdlace DESTINATION bin)
+endif()

@@ -126,6 +126,18 @@ push_ace_event(int code, void *data1)
 
 @end
 
+void macos_show_attach_tape_dialog(void) {
+    dispatch_async(dispatch_get_main_queue(), ^{
+        [[[AceMenuDelegate alloc] init] acAttachTape:nil];
+    });
+}
+
+void macos_show_spool_dialog(void) {
+    dispatch_async(dispatch_get_main_queue(), ^{
+        [[[AceMenuDelegate alloc] init] acSpoolFromFile:nil];
+    });
+}
+
 /* -------------------------------------------------------------------------
  * Helper: make a menu item with a title, selector, key-equivalent and target
  * ------------------------------------------------------------------------- */
@@ -191,39 +203,20 @@ macos_setup_menu(Uint32 user_event_type)
         NSMenu     *actMenu     = [[NSMenu alloc] initWithTitle:@"Actions"];
         actBarItem.submenu = actMenu;
 
-        /* Delete Line – F1 */
+        /* Delete Line – Cmd-1 */
         make_item(actMenu,
-                  @"Delete Line\t\t\t F1",
-                  @selector(acDeleteLine:), @"", 0, delegate);
+                  @"Delete Line",
+                  @selector(acDeleteLine:), @"1", NSEventModifierFlagCommand, delegate);
 
-        [actMenu addItem:[NSMenuItem separatorItem]];
-
-        /* Attach Tape – F3 */
+        /* Inverse Video – Cmd-4 */
         make_item(actMenu,
-                  @"Attach Tape Image…\t F3",
-                  @selector(acAttachTape:), @"", 0, delegate);
+                  @"Inverse Video",
+                  @selector(acInverseVideo:), @"4", NSEventModifierFlagCommand, delegate);
 
-        /* Inverse Video – F4 */
+        /* Graphics – Cmd-9 */
         make_item(actMenu,
-                  @"Inverse Video\t\t F4",
-                  @selector(acInverseVideo:), @"", 0, delegate);
-
-        /* Graphics – F9 */
-        make_item(actMenu,
-                  @"Graphics\t\t\t F9",
-                  @selector(acGraphics:), @"", 0, delegate);
-
-        [actMenu addItem:[NSMenuItem separatorItem]];
-
-        /* Spool from File – F11 */
-        make_item(actMenu,
-                  @"Spool from File…\t F11",
-                  @selector(acSpoolFromFile:), @"", 0, delegate);
-
-        /* Reset – F2 */
-        make_item(actMenu,
-                  @"Reset\t\t\t\t F2",
-                  @selector(acReset:), @"", 0, delegate);
+                  @"Graphics",
+                  @selector(acGraphics:), @"9", NSEventModifierFlagCommand, delegate);
 
         [actMenu addItem:[NSMenuItem separatorItem]];
 
@@ -231,6 +224,23 @@ macos_setup_menu(Uint32 user_event_type)
         make_item(actMenu,
                   @"Break\t\t\t\t Esc",
                   @selector(acBreak:), @"", 0, delegate);
+
+        /* Reset – Cmd-2 */
+        make_item(actMenu,
+                  @"Reset",
+                  @selector(acReset:), @"2", NSEventModifierFlagCommand, delegate);
+
+        [actMenu addItem:[NSMenuItem separatorItem]];
+
+        /* Attach Tape – Cmd-3 */
+        make_item(actMenu,
+                  @"Attach Tape Image…",
+                  @selector(acAttachTape:), @"3", NSEventModifierFlagCommand, delegate);
+
+        /* Spool from File – Cmd-5 */
+        make_item(actMenu,
+                  @"Spool from File…",
+                  @selector(acSpoolFromFile:), @"5", NSEventModifierFlagCommand, delegate);
 
         BOOL hasActions = NO;
         for (NSMenuItem *m in bar.itemArray) {

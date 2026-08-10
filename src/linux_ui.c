@@ -90,8 +90,8 @@ static gboolean on_key_event(GtkWidget *widget, GdkEventKey *event, gpointer use
             case GDK_KEY_F2: sym = SDLK_F2; break;
             case GDK_KEY_F3: sym = SDLK_F3; break;
             case GDK_KEY_F4: sym = SDLK_F4; break;
+            case GDK_KEY_F5: sym = SDLK_F5; break;
             case GDK_KEY_F9: sym = SDLK_F9; break;
-            case GDK_KEY_F11: sym = SDLK_F11; break;
             case GDK_KEY_Shift_L:
             case GDK_KEY_Shift_R: sym = SDLK_LSHIFT; break;
             case GDK_KEY_Control_L:
@@ -140,7 +140,7 @@ void* linux_create_window(int width, int height, const char* title, Uint32 user_
     g_signal_connect(attach_item, "activate", G_CALLBACK(on_attach_tape), NULL);
     gtk_menu_shell_append(GTK_MENU_SHELL(file_menu), attach_item);
     
-    GtkWidget *spool_item = gtk_menu_item_new_with_label("Spool... (F11)");
+    GtkWidget *spool_item = gtk_menu_item_new_with_label("Spool... (F5)");
     g_signal_connect(spool_item, "activate", G_CALLBACK(on_spool), NULL);
     gtk_menu_shell_append(GTK_MENU_SHELL(file_menu), spool_item);
     
@@ -212,5 +212,13 @@ void linux_cancel_menu(void) {
     if (g_menubar) {
         gtk_menu_shell_deactivate(GTK_MENU_SHELL(g_menubar));
     }
+}
+
+void linux_show_attach_tape_dialog(void) {
+    on_attach_tape(NULL, NULL);
+}
+
+void linux_show_spool_dialog(void) {
+    on_spool(NULL, NULL);
 }
 #endif

@@ -11,3 +11,10 @@ enable_testing()
 
 add_subdirectory(src)
 add_subdirectory(tests)
+
+if(APPLE)
+  set(CPACK_GENERATOR "DragNDrop")
+  set(CPACK_PACKAGE_FILE_NAME "sdlace-macos")
+  set(CPACK_DMG_VOLUME_NAME "SDLAce")
+  include(CPack)
+endif()

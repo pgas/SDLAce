@@ -14,8 +14,11 @@
 
 #include "ui_events.h"
 
-/* Call once after SDL_Init + SDL_CreateWindow.
- * user_event_type is the value returned by SDL_RegisterEvents(1). */
+/* Initialize the native macOS menu bar. 
+ * user_event_type: the SDL event type to post when menu items are selected. */
 void macos_setup_menu(Uint32 user_event_type);
+
+void macos_show_attach_tape_dialog(void);
+void macos_show_spool_dialog(void);
 
 #endif /* __APPLE__ */

@@ -58,8 +58,8 @@ jobs:
       - name: Archive macOS Artifact
         if: runner.os == 'macOS'
         run: |
-          cd build/src
-          zip -r ../../sdlace-macos.zip SDLAce.app
+          cd build
+          cpack -G DragNDrop
 
       - name: Upload Linux Artifact
         if: runner.os == 'Linux'
@@ -73,14 +73,14 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: sdlace-macos
-          path: build/src/SDLAce.app
+          path: build/*.dmg
 
       - name: Upload macOS Artifact for Release
         if: runner.os == 'macOS'
         uses: actions/upload-artifact@v4
         with:
           name: sdlace-macos-release
-          path: sdlace-macos.zip
+          path: build/*.dmg
 
   release:
     name: Create Release
@@ -101,4 +101,4 @@ jobs:
           files: |
             artifacts/sdlace-linux-x86_64/sdlace-linux-x86_64.tar.gz
             artifacts/sdlace-linux-arm64/sdlace-linux-arm64.tar.gz
-            artifacts/sdlace-macos-release/sdlace-macos.zip
+            artifacts/sdlace-macos-release/*.dmg

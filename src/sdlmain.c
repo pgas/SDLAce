@@ -248,6 +248,8 @@ spooler_observer(SpoolerMessage message)
       normal_speed();
       printf("Closed spool file.\n");
       break;
+    default:
+      break;
   }
 }
 
@@ -269,17 +271,29 @@ emu_key_handler(AceKeySym ks, int key_state)
       break;
 
     case SDLK_F3:
+#ifdef __APPLE__
+      macos_show_attach_tape_dialog();
+#elif defined(__linux__)
+      linux_show_attach_tape_dialog();
+#else
       printf("Enter tape image file: ");
       fflush(stdout);
       if (scanf("%256s", tape_filename) == 1)
         tape_attach(tape_filename);
+#endif
       break;
 
-    case SDLK_F11:
+    case SDLK_F5:
+#ifdef __APPLE__
+      macos_show_spool_dialog();
+#elif defined(__linux__)
+      linux_show_spool_dialog();
+#else
       printf("Enter spool file: ");
       fflush(stdout);
       if (scanf("%256s", spool_filename) == 1)
         spooler_open(spool_filename);
+#endif
       break;
 
     case SDLK_F2:
@@ -352,14 +366,25 @@ main(int argc, char **argv)
 {
   printf("SDLAce: Jupiter ACE emulator v%s\n", XACE_VERSION);
   printf("Keys:\n");
+#ifdef __APPLE__
+  printf("\tCmd-1  - Delete Line\n");
+  printf("\tCmd-3  - Attach a tape image\n");
+  printf("\tCmd-4  - Inverse Video\n");
+  printf("\tCmd-9  - Graphics\n");
+  printf("\tCmd-5  - Spool from a file\n");
+  printf("\tCmd-2  - Reset\n");
+  printf("\tEsc    - Break\n");
+  printf("\tCmd-Q  - Quit SDLAce\n");
+#else
   printf("\tF1     - Delete Line\n");
   printf("\tF3     - Attach a tape image\n");
   printf("\tF4     - Inverse Video\n");
   printf("\tF9     - Graphics\n");
-  printf("\tF11    - Spool from a file\n");
+  printf("\tF5     - Spool from a file\n");
   printf("\tF2     - Reset\n");
   printf("\tEsc    - Break\n");
   printf("\tCtrl-Q - Quit SDLAce\n");
+#endif
 
   loadrom(mem);
   tape_patches(mem);
@@ -690,8 +715,15 @@ check_events(void)
       case SDL_KEYDOWN: {
         SDL_Keycode ks   = ev.key.keysym.sym;
         int         mods = (int)ev.key.keysym.mod;
-        /* Cmd+V (macOS) or Ctrl+V (Linux) — paste from host clipboard */
-        if (ks == SDLK_v && (mods & (KMOD_GUI | KMOD_CTRL))) {
+#ifdef __APPLE__
+        /* On macOS, native menus handle all Cmd shortcuts (Cmd-1..9, Cmd-V, etc).
+           Ignore them here to prevent double actions or sending keys to the emulator. */
+        if (mods & KMOD_GUI) {
+          break;
+        }
+#endif
+        /* Ctrl+V (Linux/Windows) — paste from host clipboard */
+        if (ks == SDLK_v && (mods & KMOD_CTRL)) {
           paste_from_clipboard();
           break;
         }
@@ -704,6 +736,11 @@ check_events(void)
         if (!spooler_active()) {
           SDL_Keycode ks   = ev.key.keysym.sym;
           int         mods = (int)ev.key.keysym.mod;
+#ifdef __APPLE__
+          if (mods & KMOD_GUI) {
+            break;
+          }
+#endif
           keyboard_keyrelease(ks, mods);
         }
         break;
