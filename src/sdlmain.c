@@ -21,8 +21,8 @@
  * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
-#include <limits.h>
 #include <fcntl.h>
+#include <limits.h>
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -35,40 +35,33 @@
 #include <SDL2/SDL.h>
 
 #define STB_IMAGE_IMPLEMENTATION
-#include "stb_image.h"
 #include "ace_logo_data.h"
+#include "stb_image.h"
 
-#include "z80.h"
-#include "tape.h"
 #include "keyboard.h"
 #include "spooler.h"
+#include "tape.h"
 #include "ui_events.h"
+#include "z80.h"
 #ifdef __APPLE__
-#  include "macos_ui.h"
+#include "macos_ui.h"
 #else
-#  include "linux_ui.h"
+#include "linux_ui.h"
 #endif
 
 /* Top border is taller to fit the "JUPITER ACE" brand text + red stripes.
  * The value here is at SCALE=2 (native 1× = half); we scale proportionally. */
-#define BORDER_SIDE   (16 * SCALE)   /* left/right/bottom border width */
-#define BORDER_TOP    (56 * SCALE)   /* top border (brand area) */
+#define BORDER_SIDE (16 * SCALE) /* left/right/bottom border width */
+#define BORDER_TOP (56 * SCALE)  /* top border (brand area) */
 
 /* --------------------------------------------------------------------------
  * Global state shared with the Z80 core
  * -------------------------------------------------------------------------- */
 int rrnoshm = 4;
 unsigned char mem[65536];
-unsigned char *memptr[8] = {
-  mem,
-  mem + 0x2000,
-  mem + 0x4000,
-  mem + 0x6000,
-  mem + 0x8000,
-  mem + 0xa000,
-  mem + 0xc000,
-  mem + 0xe000
-};
+unsigned char *memptr[8] = {mem,          mem + 0x2000, mem + 0x4000,
+                            mem + 0x6000, mem + 0x8000, mem + 0xa000,
+                            mem + 0xc000, mem + 0xe000};
 
 unsigned long tstates = 0, tsmax = 62500;
 
@@ -94,14 +87,14 @@ int refresh_screen = 1;
 /* --------------------------------------------------------------------------
  * SDL state
  * -------------------------------------------------------------------------- */
-static SDL_Window   *sdl_window   = NULL;
+static SDL_Window *sdl_window = NULL;
 static SDL_Renderer *sdl_renderer = NULL;
-static SDL_Texture  *sdl_texture  = NULL;
+static SDL_Texture *sdl_texture = NULL;
 
 /* Bezel logo texture (ace.png) */
-static SDL_Texture  *bezel_logo_texture = NULL;
-static int           bezel_logo_w       = 0;
-static int           bezel_logo_h       = 0;
+static SDL_Texture *bezel_logo_texture = NULL;
+static int bezel_logo_w = 0;
+static int bezel_logo_h = 0;
 
 /* Pixel buffer: 32-bit ARGB, hsize × vsize */
 static Uint32 *pixel_buf = NULL;
@@ -116,7 +109,7 @@ static int invert = 0;
  * -------------------------------------------------------------------------- */
 static SDL_AudioDeviceID sdl_audio_device = 0;
 #define AUDIO_SAMPLE_RATE 44100
-#define CYCLES_PER_FRAME  65000
+#define CYCLES_PER_FRAME 65000
 #define SAMPLES_PER_FRAME (AUDIO_SAMPLE_RATE / 50) /* 882 */
 
 static int speaker_diaphragm_pos = 0; /* 0 or 1 */
@@ -125,9 +118,7 @@ static float audio_buffer[SAMPLES_PER_FRAME];
 static float dc_blocker_prev_x = 0.0f;
 static float dc_blocker_prev_y = 0.0f;
 
-static void
-set_speaker_diaphragm(int pos)
-{
+static void set_speaker_diaphragm(int pos) {
   if (tsmax != CYCLES_PER_FRAME || sdl_audio_device == 0) {
     speaker_diaphragm_pos = pos;
     return;
@@ -137,12 +128,15 @@ set_speaker_diaphragm(int pos)
   if (current_t < last_speaker_tstates) {
     last_speaker_tstates = 0;
   }
-  if (current_t > CYCLES_PER_FRAME) current_t = CYCLES_PER_FRAME;
+  if (current_t > CYCLES_PER_FRAME)
+    current_t = CYCLES_PER_FRAME;
 
-  unsigned int last_s = (last_speaker_tstates * SAMPLES_PER_FRAME) / CYCLES_PER_FRAME;
+  unsigned int last_s =
+      (last_speaker_tstates * SAMPLES_PER_FRAME) / CYCLES_PER_FRAME;
   unsigned int current_s = (current_t * SAMPLES_PER_FRAME) / CYCLES_PER_FRAME;
 
-  if (current_s > SAMPLES_PER_FRAME) current_s = SAMPLES_PER_FRAME;
+  if (current_s > SAMPLES_PER_FRAME)
+    current_s = SAMPLES_PER_FRAME;
 
   float val = speaker_diaphragm_pos ? 0.15f : -0.15f;
   for (unsigned int i = last_s; i < current_s; i++) {
@@ -171,18 +165,18 @@ static Uint32 ace_sdl_event_type = (Uint32)-1;
  * The temp file is unlink'd immediately after open; the inode stays alive
  * until the spooler fclose's it (standard POSIX behaviour).
  * -------------------------------------------------------------------------- */
-static void
-paste_from_clipboard(void)
-{
+static void paste_from_clipboard(void) {
   char *text;
   char tmppath[256];
   FILE *f;
 
-  if (spooler_active()) return;  /* already spooling */
+  if (spooler_active())
+    return; /* already spooling */
 
   text = SDL_GetClipboardText();
   if (!text || !*text) {
-    if (text) SDL_free(text);
+    if (text)
+      SDL_free(text);
     return;
   }
 
@@ -192,7 +186,7 @@ paste_from_clipboard(void)
     fputs(text, f);
     fclose(f);
     spooler_open(tmppath);
-    unlink(tmppath);   /* safe: spooler holds the fd */
+    unlink(tmppath); /* safe: spooler holds the fd */
   }
   SDL_free(text);
 }
@@ -202,17 +196,14 @@ paste_from_clipboard(void)
  * -------------------------------------------------------------------------- */
 
 /* Handle the SIGALRM signal used for the Ace's interrupt */
-static void
-sigint_handler(int signum)
-{
+static void sigint_handler(int signum) {
   (void)signum;
-  if (interrupted == 0) interrupted = 1;
+  if (interrupted == 0)
+    interrupted = 1;
 }
 
 /* Handle any signals to do with quitting the program */
-static void
-sigquit_handler(int signum)
-{
+static void sigquit_handler(int signum) {
   (void)signum;
   tape_detach();
   closedown();
@@ -220,30 +211,24 @@ sigquit_handler(int signum)
 }
 
 /* ints_per_sec — interrupts per second, up to 1000 */
-static void
-set_itimer(int ints_per_sec)
-{
+static void set_itimer(int ints_per_sec) {
   struct itimerval itv;
   int freq = 1000 / ints_per_sec;
 
-  itv.it_interval.tv_sec  = 0;
+  itv.it_interval.tv_sec = 0;
   itv.it_interval.tv_usec = (freq % 1000) * 1000;
-  itv.it_value.tv_sec     = itv.it_interval.tv_sec;
-  itv.it_value.tv_usec    = itv.it_interval.tv_usec;
+  itv.it_value.tv_sec = itv.it_interval.tv_sec;
+  itv.it_value.tv_usec = itv.it_interval.tv_usec;
   setitimer(ITIMER_REAL, &itv, NULL);
 }
 
-static void
-normal_speed(void)
-{
-  set_itimer(50);   /* 50 ints/sec */
-  scrn_freq = 1;    /* refresh screen every 50Hz frame */
+static void normal_speed(void) {
+  set_itimer(50);           /* 50 ints/sec */
+  scrn_freq = 1;            /* refresh screen every 50Hz frame */
   tsmax = CYCLES_PER_FRAME; /* 3.25 MHz CPU: 65,000 t-states per 50Hz frame */
 }
 
-static void
-fast_speed(void)
-{
+static void fast_speed(void) {
   set_itimer(1000); /* 1000 ints/sec */
   scrn_freq = 4;
   tsmax = ULONG_MAX;
@@ -252,110 +237,103 @@ fast_speed(void)
 /* --------------------------------------------------------------------------
  * Observer callbacks
  * -------------------------------------------------------------------------- */
-static void
-tape_observer(int tape_attached, int tape_pos,
-  const char tape_filename[TAPE_MAX_FILENAME_SIZE],
-  TapeMessageType message_type, const char message[TAPE_MAX_MESSAGE_SIZE])
-{
+static void tape_observer(int tape_attached, int tape_pos,
+                          const char tape_filename[TAPE_MAX_FILENAME_SIZE],
+                          TapeMessageType message_type,
+                          const char message[TAPE_MAX_MESSAGE_SIZE]) {
   switch (message_type) {
-    case TAPE_NO_MESSAGE:
-      if (tape_attached)
-        printf("TAPE: %s Pos: %04d\n", tape_filename, tape_pos);
-      break;
-    case TAPE_MESSAGE:
-      if (tape_attached)
-        printf("TAPE: %s Pos: %04d - %s\n", tape_filename, tape_pos, message);
-      else
-        printf("TAPE: empty tape Pos: %04d - %s\n", tape_pos, message);
-      break;
-    case TAPE_ERROR:
-      if (tape_attached)
-        fprintf(stderr, "TAPE: %s Pos: %04d - Error: %s\n",
-                tape_filename, tape_pos, message);
-      else
-        fprintf(stderr, "TAPE: empty tape Pos: %04d - Error: %s\n",
-                tape_pos, message);
-      break;
+  case TAPE_NO_MESSAGE:
+    if (tape_attached)
+      printf("TAPE: %s Pos: %04d\n", tape_filename, tape_pos);
+    break;
+  case TAPE_MESSAGE:
+    if (tape_attached)
+      printf("TAPE: %s Pos: %04d - %s\n", tape_filename, tape_pos, message);
+    else
+      printf("TAPE: empty tape Pos: %04d - %s\n", tape_pos, message);
+    break;
+  case TAPE_ERROR:
+    if (tape_attached)
+      fprintf(stderr, "TAPE: %s Pos: %04d - Error: %s\n", tape_filename,
+              tape_pos, message);
+    else
+      fprintf(stderr, "TAPE: empty tape Pos: %04d - Error: %s\n", tape_pos,
+              message);
+    break;
   }
 }
 
-static void
-spooler_observer(SpoolerMessage message)
-{
+static void spooler_observer(SpoolerMessage message) {
   switch (message) {
-    case SPOOLER_OPENED:
-      printf("Opened spool file.\n");
-      break;
-    case SPOOLER_OPEN_ERROR:
-      fprintf(stderr, "Couldn't open spool file.\n");
-      break;
-    case SPOOLER_CLOSED:
-      normal_speed();
-      printf("Closed spool file.\n");
-      break;
-    default:
-      break;
+  case SPOOLER_OPENED:
+    printf("Opened spool file.\n");
+    break;
+  case SPOOLER_OPEN_ERROR:
+    fprintf(stderr, "Couldn't open spool file.\n");
+    break;
+  case SPOOLER_CLOSED:
+    normal_speed();
+    printf("Closed spool file.\n");
+    break;
+  default:
+    break;
   }
 }
 
 /* --------------------------------------------------------------------------
  * Emulator key handler (special keys not mapped to Ace keys)
  * -------------------------------------------------------------------------- */
-static void
-emu_key_handler(AceKeySym ks, int key_state)
-{
+static void emu_key_handler(AceKeySym ks, int key_state) {
   char spool_filename[257];
   char tape_filename[257];
 
   switch (ks) {
-    case SDLK_q:
-      /* Ctrl-Q → quit */
-      if (key_state & ACE_CTRL_MASK) {
-        raise(SIGQUIT);
-      }
-      break;
+  case SDLK_q:
+    /* Ctrl-Q → quit */
+    if (key_state & ACE_CTRL_MASK) {
+      raise(SIGQUIT);
+    }
+    break;
 
-    case SDLK_F3:
+  case SDLK_F3:
 #ifdef __APPLE__
-      macos_show_attach_tape_dialog();
+    macos_show_attach_tape_dialog();
 #elif defined(__linux__)
-      linux_show_attach_tape_dialog();
+    linux_show_attach_tape_dialog();
 #else
-      printf("Enter tape image file: ");
-      fflush(stdout);
-      if (scanf("%256s", tape_filename) == 1)
-        tape_attach(tape_filename);
+    printf("Enter tape image file: ");
+    fflush(stdout);
+    if (scanf("%256s", tape_filename) == 1)
+      tape_attach(tape_filename);
 #endif
-      break;
+    break;
 
-    case SDLK_F5:
+  case SDLK_F5:
 #ifdef __APPLE__
-      macos_show_spool_dialog();
+    macos_show_spool_dialog();
 #elif defined(__linux__)
-      linux_show_spool_dialog();
+    linux_show_spool_dialog();
 #else
-      printf("Enter spool file: ");
-      fflush(stdout);
-      if (scanf("%256s", spool_filename) == 1)
-        spooler_open(spool_filename);
+    printf("Enter spool file: ");
+    fflush(stdout);
+    if (scanf("%256s", spool_filename) == 1)
+      spooler_open(spool_filename);
 #endif
-      break;
+    break;
 
-    case SDLK_F2:
-      reset_ace = 1;
-      memset(mem + 8192, 0xff, 57344);
-      refresh_screen = 1;
-      keyboard_clear();
-      break;
+  case SDLK_F2:
+    reset_ace = 1;
+    memset(mem + 8192, 0xff, 57344);
+    refresh_screen = 1;
+    keyboard_clear();
+    break;
   }
 }
 
 /* --------------------------------------------------------------------------
  * CLI args
  * -------------------------------------------------------------------------- */
-static void
-handle_cli_args(int argc, char **argv)
-{
+static void handle_cli_args(int argc, char **argv) {
   int arg_pos = 0;
   char *cli_switch;
 
@@ -381,26 +359,31 @@ handle_cli_args(int argc, char **argv)
 /* --------------------------------------------------------------------------
  * Signal handlers
  * -------------------------------------------------------------------------- */
-static void
-setup_sighandlers(void)
-{
+static void setup_sighandlers(void) {
   struct sigaction sa_quit;
   struct sigaction sa_alarm;
-  memset(&sa_quit,  0, sizeof(sa_quit));
+  memset(&sa_quit, 0, sizeof(sa_quit));
   memset(&sa_alarm, 0, sizeof(sa_alarm));
 
-  sa_quit.sa_handler  = sigquit_handler;
-  sa_quit.sa_flags    = 0;
+  sa_quit.sa_handler = sigquit_handler;
+  sa_quit.sa_flags = 0;
   sa_alarm.sa_handler = sigint_handler;
-  sa_alarm.sa_flags   = SA_RESTART;
+  sa_alarm.sa_flags = SA_RESTART;
 
-  if (sigaction(SIGINT,  &sa_quit,  NULL) < 0) goto error;
-  if (sigaction(SIGHUP,  &sa_quit,  NULL) < 0) goto error;
-  if (sigaction(SIGILL,  &sa_quit,  NULL) < 0) goto error;
-  if (sigaction(SIGTERM, &sa_quit,  NULL) < 0) goto error;
-  if (sigaction(SIGQUIT, &sa_quit,  NULL) < 0) goto error;
-  if (sigaction(SIGSEGV, &sa_quit,  NULL) < 0) goto error;
-  if (sigaction(SIGALRM, &sa_alarm, NULL) < 0) goto error;
+  if (sigaction(SIGINT, &sa_quit, NULL) < 0)
+    goto error;
+  if (sigaction(SIGHUP, &sa_quit, NULL) < 0)
+    goto error;
+  if (sigaction(SIGILL, &sa_quit, NULL) < 0)
+    goto error;
+  if (sigaction(SIGTERM, &sa_quit, NULL) < 0)
+    goto error;
+  if (sigaction(SIGQUIT, &sa_quit, NULL) < 0)
+    goto error;
+  if (sigaction(SIGSEGV, &sa_quit, NULL) < 0)
+    goto error;
+  if (sigaction(SIGALRM, &sa_alarm, NULL) < 0)
+    goto error;
   return;
 
 error:
@@ -411,9 +394,7 @@ error:
 /* --------------------------------------------------------------------------
  * main
  * -------------------------------------------------------------------------- */
-int
-main(int argc, char **argv)
-{
+int main(int argc, char **argv) {
   printf("SDLAce: Jupiter ACE emulator v%s\n", XACE_VERSION);
   printf("Keys:\n");
 #ifdef __APPLE__
@@ -455,9 +436,7 @@ main(int argc, char **argv)
 /* --------------------------------------------------------------------------
  * ROM loading
  * -------------------------------------------------------------------------- */
-void
-loadrom(unsigned char *x)
-{
+void loadrom(unsigned char *x) {
   FILE *in;
 
   /* First try CWD, then the directory of the executable */
@@ -492,48 +471,54 @@ loadrom(unsigned char *x)
 /* --------------------------------------------------------------------------
  * I/O port handlers (called by Z80 core)
  * -------------------------------------------------------------------------- */
-unsigned int
-in(int h, int l)
-{
+unsigned int in(int h, int l) {
   if ((l & 1) == 0) {
     set_speaker_diaphragm(0);
   }
   if (l == 0xfe) /* keyboard */
     switch (h) {
-      case 0xfe: return keyboard_get_keyport(0);
-      case 0xfd: return keyboard_get_keyport(1);
-      case 0xfb: return keyboard_get_keyport(2);
-      case 0xf7: return keyboard_get_keyport(3);
-      case 0xef: return keyboard_get_keyport(4);
-      case 0xdf: return keyboard_get_keyport(5);
-      case 0xbf: return keyboard_get_keyport(6);
-      case 0x7f: return keyboard_get_keyport(7);
-      default:   return 255;
+    case 0xfe:
+      return keyboard_get_keyport(0);
+    case 0xfd:
+      return keyboard_get_keyport(1);
+    case 0xfb:
+      return keyboard_get_keyport(2);
+    case 0xf7:
+      return keyboard_get_keyport(3);
+    case 0xef:
+      return keyboard_get_keyport(4);
+    case 0xdf:
+      return keyboard_get_keyport(5);
+    case 0xbf:
+      return keyboard_get_keyport(6);
+    case 0x7f:
+      return keyboard_get_keyport(7);
+    default:
+      return 255;
     }
   return 255;
 }
 
-unsigned int
-out(int h, int l, int a)
-{
+unsigned int out(int h, int l, int a) {
   if ((l & 1) == 0) {
     set_speaker_diaphragm(1);
   }
-  (void)h; (void)a;
+  (void)h;
+  (void)a;
   return 0;
 }
 
 /* --------------------------------------------------------------------------
  * Timing helpers (called by Z80 core)
  * -------------------------------------------------------------------------- */
-void
-fix_tstates(void)
-{
+void fix_tstates(void) {
   if (tsmax == CYCLES_PER_FRAME) {
     /* 1. Generate audio for this 50Hz frame (65,000 t-states) */
     if (sdl_audio_device != 0) {
-      unsigned int last_s = (last_speaker_tstates * SAMPLES_PER_FRAME) / CYCLES_PER_FRAME;
-      if (last_s > SAMPLES_PER_FRAME) last_s = SAMPLES_PER_FRAME;
+      unsigned int last_s =
+          (last_speaker_tstates * SAMPLES_PER_FRAME) / CYCLES_PER_FRAME;
+      if (last_s > SAMPLES_PER_FRAME)
+        last_s = SAMPLES_PER_FRAME;
       float val = speaker_diaphragm_pos ? 0.15f : -0.15f;
       for (unsigned int i = last_s; i < SAMPLES_PER_FRAME; i++) {
         audio_buffer[i] = val;
@@ -553,7 +538,8 @@ fix_tstates(void)
       dc_blocker_prev_y = prev_y;
 
       /* Queue audio */
-      SDL_QueueAudio(sdl_audio_device, audio_buffer, SAMPLES_PER_FRAME * sizeof(float));
+      SDL_QueueAudio(sdl_audio_device, audio_buffer,
+                     SAMPLES_PER_FRAME * sizeof(float));
       last_speaker_tstates = 0;
     }
 
@@ -562,19 +548,22 @@ fix_tstates(void)
       interrupted = 1;
     }
 
-    /* 3. Frame pacing: audio queue throttle + high-resolution wall-clock fallback */
+    /* 3. Frame pacing: audio queue throttle + high-resolution wall-clock
+     * fallback */
     static Uint64 next_frame_counter = 0;
     Uint64 perf_freq = SDL_GetPerformanceFrequency();
     Uint64 ticks_per_frame = perf_freq / 50;
     Uint64 now = SDL_GetPerformanceCounter();
 
-    /* Audio queue throttling: sleep if audio queue exceeds 2 frames (~40ms buffer) */
+    /* Audio queue throttling: sleep if audio queue exceeds 2 frames (~40ms
+     * buffer) */
     if (sdl_audio_device != 0) {
       Uint32 queued_bytes = SDL_GetQueuedAudioSize(sdl_audio_device);
       Uint32 target_bytes = SAMPLES_PER_FRAME * sizeof(float) * 2;
       if (queued_bytes > target_bytes) {
         Uint32 excess_bytes = queued_bytes - target_bytes;
-        Uint32 sleep_ms = (excess_bytes * 1000) / (AUDIO_SAMPLE_RATE * sizeof(float));
+        Uint32 sleep_ms =
+            (excess_bytes * 1000) / (AUDIO_SAMPLE_RATE * sizeof(float));
         if (sleep_ms >= 1) {
           SDL_Delay(sleep_ms);
         }
@@ -583,7 +572,8 @@ fix_tstates(void)
 
     /* High-resolution wall-clock pacing fallback */
     now = SDL_GetPerformanceCounter();
-    if (next_frame_counter == 0 || now > next_frame_counter + ticks_per_frame * 5) {
+    if (next_frame_counter == 0 ||
+        now > next_frame_counter + ticks_per_frame * 5) {
       next_frame_counter = now + ticks_per_frame;
     } else {
       if (now < next_frame_counter) {
@@ -609,9 +599,7 @@ fix_tstates(void)
 static int pending_release_key = 0;
 static int pending_release_timer = 0;
 
-void
-do_interrupt(void)
-{
+void do_interrupt(void) {
   static int count = 0;
   if (interrupted == 1) {
     interrupted = 2;
@@ -641,9 +629,7 @@ do_interrupt(void)
 /* --------------------------------------------------------------------------
  * SDL startup
  * -------------------------------------------------------------------------- */
-void
-startup(void)
-{
+void startup(void) {
   if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_TIMER | SDL_INIT_AUDIO) != 0) {
     fprintf(stderr, "SDL_Init failed: %s\n", SDL_GetError());
     exit(1);
@@ -662,7 +648,8 @@ startup(void)
   if (sdl_audio_device != 0) {
     SDL_PauseAudioDevice(sdl_audio_device, 0); /* start playing */
   } else {
-    fprintf(stderr, "Warning: SDL_OpenAudioDevice failed: %s\n", SDL_GetError());
+    fprintf(stderr, "Warning: SDL_OpenAudioDevice failed: %s\n",
+            SDL_GetError());
   }
 
   /* Register one custom event type for macOS menu actions */
@@ -675,15 +662,14 @@ startup(void)
   int win_h = vsize + BORDER_TOP + BORDER_SIDE;
 
 #ifndef __APPLE__
-  void* xid = linux_create_window(win_w, win_h, "SDLAce — Jupiter ACE Emulator", ace_sdl_event_type);
+  void *xid = linux_create_window(win_w, win_h, "SDLAce — Jupiter ACE Emulator",
+                                  ace_sdl_event_type);
   sdl_window = SDL_CreateWindowFrom(xid);
 #else
   sdl_window = SDL_CreateWindow(
-    "SDLAce — Jupiter ACE Emulator",
-    SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
-    win_w, win_h,
-    SDL_WINDOW_SHOWN | SDL_WINDOW_ALLOW_HIGHDPI | SDL_WINDOW_RESIZABLE
-  );
+      "SDLAce — Jupiter ACE Emulator", SDL_WINDOWPOS_CENTERED,
+      SDL_WINDOWPOS_CENTERED, win_w, win_h,
+      SDL_WINDOW_SHOWN | SDL_WINDOW_ALLOW_HIGHDPI | SDL_WINDOW_RESIZABLE);
 #endif
 
   if (!sdl_window) {
@@ -692,10 +678,11 @@ startup(void)
   }
 
   /* Don't allow the window to shrink below half the native ACE resolution */
-  SDL_SetWindowMinimumSize(sdl_window, hsize / 2 + BORDER_SIDE, vsize / 2 + BORDER_TOP / 2);
+  SDL_SetWindowMinimumSize(sdl_window, hsize / 2 + BORDER_SIDE,
+                           vsize / 2 + BORDER_TOP / 2);
 
-  sdl_renderer = SDL_CreateRenderer(sdl_window, -1,
-    SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
+  sdl_renderer = SDL_CreateRenderer(
+      sdl_window, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
   if (!sdl_renderer) {
     /* Fall back to software renderer */
     sdl_renderer = SDL_CreateRenderer(sdl_window, -1, SDL_RENDERER_SOFTWARE);
@@ -710,12 +697,8 @@ startup(void)
   SDL_RenderClear(sdl_renderer);
 
   /* Inner screen texture (streaming = we update it every frame) */
-  sdl_texture = SDL_CreateTexture(
-    sdl_renderer,
-    SDL_PIXELFORMAT_ARGB8888,
-    SDL_TEXTUREACCESS_STREAMING,
-    hsize, vsize
-  );
+  sdl_texture = SDL_CreateTexture(sdl_renderer, SDL_PIXELFORMAT_ARGB8888,
+                                  SDL_TEXTUREACCESS_STREAMING, hsize, vsize);
   if (!sdl_texture) {
     fprintf(stderr, "SDL_CreateTexture failed: %s\n", SDL_GetError());
     exit(1);
@@ -742,9 +725,10 @@ startup(void)
   {
     int w, h, channels;
     unsigned char *img_data = stbi_load_from_memory(
-      ace_logo_png, (int)ace_logo_png_len, &w, &h, &channels, 4);
+        ace_logo_png, (int)ace_logo_png_len, &w, &h, &channels, 4);
     if (img_data) {
-      /* Convert any white/near-white background pixels to transparent alpha so it blends smoothly */
+      /* Convert any white/near-white background pixels to transparent alpha so
+       * it blends smoothly */
       for (int i = 0; i < w * h; i++) {
         unsigned char r = img_data[i * 4 + 0];
         unsigned char g = img_data[i * 4 + 1];
@@ -755,9 +739,10 @@ startup(void)
       }
 
       SDL_Surface *surface = SDL_CreateRGBSurfaceWithFormatFrom(
-        img_data, w, h, 32, w * 4, SDL_PIXELFORMAT_RGBA32);
+          img_data, w, h, 32, w * 4, SDL_PIXELFORMAT_RGBA32);
       if (surface) {
-        bezel_logo_texture = SDL_CreateTextureFromSurface(sdl_renderer, surface);
+        bezel_logo_texture =
+            SDL_CreateTextureFromSurface(sdl_renderer, surface);
         if (bezel_logo_texture) {
           bezel_logo_w = w;
           bezel_logo_h = h;
@@ -782,114 +767,119 @@ startup(void)
 /* --------------------------------------------------------------------------
  * Event processing
  * -------------------------------------------------------------------------- */
-void
-check_events(void)
-{
+void check_events(void) {
   SDL_Event ev;
 
   while (SDL_PollEvent(&ev)) {
     /* Custom event from macOS menu */
     if (ev.type == ace_sdl_event_type) {
-      char *path = (char *)ev.user.data1;  /* may be NULL */
+      char *path = (char *)ev.user.data1; /* may be NULL */
       switch (ev.user.code) {
-        case ACE_EVENT_DELETE_LINE:
-          keyboard_keypress(SDLK_F1, 0);
-          pending_release_key = SDLK_F1;
-          pending_release_timer = 10;
-          break;
-        case ACE_EVENT_ATTACH_TAPE:
-          if (path) { tape_attach(path); free(path); }
-          break;
-        case ACE_EVENT_REWIND_TAPE:
-          tape_rewind();
-          break;
-        case ACE_EVENT_INVERSE_VIDEO:
-          keyboard_keypress(SDLK_F4, 0);
-          pending_release_key = SDLK_F4;
-          pending_release_timer = 10;
-          break;
-        case ACE_EVENT_GRAPHICS:
-          keyboard_keypress(SDLK_F9, 0);
-          pending_release_key = SDLK_F9;
-          pending_release_timer = 10;
-          break;
-        case ACE_EVENT_SPOOL:
-          if (path) { spooler_open(path); free(path); }
-          break;
-        case ACE_EVENT_RESET:
-          reset_ace = 1;
-          memset(mem + 8192, 0xff, 57344);
-          refresh_screen = 1;
-          keyboard_clear();
-          break;
-        case ACE_EVENT_BREAK:
-          keyboard_keypress(SDLK_ESCAPE, 0);
-          pending_release_key = SDLK_ESCAPE;
-          pending_release_timer = 10;
-          break;
-        case ACE_EVENT_PASTE:
-          paste_from_clipboard();
-          break;
+      case ACE_EVENT_DELETE_LINE:
+        keyboard_keypress(SDLK_F1, 0);
+        pending_release_key = SDLK_F1;
+        pending_release_timer = 10;
+        break;
+      case ACE_EVENT_ATTACH_TAPE:
+        if (path) {
+          tape_attach(path);
+          free(path);
+        }
+        break;
+      case ACE_EVENT_REWIND_TAPE:
+        tape_rewind();
+        break;
+      case ACE_EVENT_INVERSE_VIDEO:
+        keyboard_keypress(SDLK_F4, 0);
+        pending_release_key = SDLK_F4;
+        pending_release_timer = 10;
+        break;
+      case ACE_EVENT_GRAPHICS:
+        keyboard_keypress(SDLK_F9, 0);
+        pending_release_key = SDLK_F9;
+        pending_release_timer = 10;
+        break;
+      case ACE_EVENT_SPOOL:
+        if (path) {
+          spooler_open(path);
+          free(path);
+        }
+        break;
+      case ACE_EVENT_RESET:
+        reset_ace = 1;
+        memset(mem + 8192, 0xff, 57344);
+        refresh_screen = 1;
+        keyboard_clear();
+        break;
+      case ACE_EVENT_BREAK:
+        keyboard_keypress(SDLK_ESCAPE, 0);
+        pending_release_key = SDLK_ESCAPE;
+        pending_release_timer = 10;
+        break;
+      case ACE_EVENT_PASTE:
+        paste_from_clipboard();
+        break;
       }
       continue;
     }
 
     switch (ev.type) {
-      case SDL_QUIT:
-        tape_detach();
-        closedown();
-        exit(0);
-        break;
+    case SDL_QUIT:
+      tape_detach();
+      closedown();
+      exit(0);
+      break;
 
-      case SDL_WINDOWEVENT:
-        if (ev.window.event == SDL_WINDOWEVENT_EXPOSED ||
-            ev.window.event == SDL_WINDOWEVENT_RESTORED ||
-            ev.window.event == SDL_WINDOWEVENT_RESIZED ||
-            ev.window.event == SDL_WINDOWEVENT_SIZE_CHANGED)
-          refresh_screen = 1;
-        break;
+    case SDL_WINDOWEVENT:
+      if (ev.window.event == SDL_WINDOWEVENT_EXPOSED ||
+          ev.window.event == SDL_WINDOWEVENT_RESTORED ||
+          ev.window.event == SDL_WINDOWEVENT_RESIZED ||
+          ev.window.event == SDL_WINDOWEVENT_SIZE_CHANGED)
+        refresh_screen = 1;
+      break;
 
-      case SDL_KEYDOWN: {
-        SDL_Keycode ks   = ev.key.keysym.sym;
-        int         mods = (int)ev.key.keysym.mod;
+    case SDL_KEYDOWN: {
+      SDL_Keycode ks = ev.key.keysym.sym;
+      int mods = (int)ev.key.keysym.mod;
 #ifdef __APPLE__
-        /* On macOS, native menus handle all Cmd shortcuts (Cmd-1..9, Cmd-V, etc).
-           Ignore them here to prevent double actions or sending keys to the emulator. */
+      /* On macOS, native menus handle all Cmd shortcuts (Cmd-1..9, Cmd-V, etc).
+         Ignore them here to prevent double actions or sending keys to the
+         emulator. */
+      if (mods & KMOD_GUI) {
+        break;
+      }
+#endif
+      /* Ctrl+V (Linux/Windows) — paste from host clipboard */
+      if (ks == SDLK_v && (mods & KMOD_CTRL)) {
+        paste_from_clipboard();
+        break;
+      }
+      if (!spooler_active())
+        keyboard_keypress(ks, mods);
+      break;
+    }
+
+    case SDL_KEYUP:
+      if (!spooler_active()) {
+        SDL_Keycode ks = ev.key.keysym.sym;
+        int mods = (int)ev.key.keysym.mod;
+#ifdef __APPLE__
         if (mods & KMOD_GUI) {
           break;
         }
 #endif
-        /* Ctrl+V (Linux/Windows) — paste from host clipboard */
-        if (ks == SDLK_v && (mods & KMOD_CTRL)) {
-          paste_from_clipboard();
-          break;
-        }
-        if (!spooler_active())
-          keyboard_keypress(ks, mods);
-        break;
+        keyboard_keyrelease(ks, mods);
       }
+      break;
 
-      case SDL_KEYUP:
-        if (!spooler_active()) {
-          SDL_Keycode ks   = ev.key.keysym.sym;
-          int         mods = (int)ev.key.keysym.mod;
-#ifdef __APPLE__
-          if (mods & KMOD_GUI) {
-            break;
-          }
-#endif
-          keyboard_keyrelease(ks, mods);
-        }
-        break;
-
-      case SDL_MOUSEBUTTONDOWN:
+    case SDL_MOUSEBUTTONDOWN:
 #ifndef __APPLE__
-        linux_cancel_menu();
+      linux_cancel_menu();
 #endif
-        break;
+      break;
 
-      default:
-        break;
+    default:
+      break;
     }
   }
 }
@@ -899,9 +889,7 @@ check_events(void)
  * -------------------------------------------------------------------------- */
 
 /* Set a scaled pixel in pixel_buf */
-static void
-set_pixel(int x, int y, Uint32 colour)
-{
+static void set_pixel(int x, int y, Uint32 colour) {
   int sx, sy;
   for (sy = 0; sy < SCALE; sy++)
     for (sx = 0; sx < SCALE; sx++)
@@ -909,20 +897,21 @@ set_pixel(int x, int y, Uint32 colour)
 }
 
 /* Draw one ACE character cell at grid position (x, y) */
-static void
-set_image_character(int x, int y, int inv, unsigned char *charbmap)
-{
+static void set_image_character(int x, int y, int inv,
+                                unsigned char *charbmap) {
   int charbmap_x, charbmap_y;
   unsigned char charbmap_row;
   unsigned char charbmap_row_mask;
 
   for (charbmap_y = 0; charbmap_y < 8; charbmap_y++) {
     charbmap_row = charbmap[charbmap_y];
-    if (inv) charbmap_row ^= 255;
+    if (inv)
+      charbmap_row ^= 255;
 
     charbmap_row_mask = 128;
     for (charbmap_x = 0; charbmap_x < 8; charbmap_x++) {
-      Uint32 colour = (charbmap_row & charbmap_row_mask) ? col_black : col_white;
+      Uint32 colour =
+          (charbmap_row & charbmap_row_mask) ? col_black : col_white;
       set_pixel(x * 8 + charbmap_x, y * 8 + charbmap_y, colour);
       charbmap_row_mask >>= 1;
     }
@@ -940,13 +929,12 @@ set_image_character(int x, int y, int inv, unsigned char *charbmap)
  *
  * All coordinates are renderer-output pixels (HiDPI-aware).
  * -------------------------------------------------------------------------- */
-static void
-draw_bezel(int win_w, int win_h, int dst_x, int dst_y, int dst_w, int dst_h)
-{
+static void draw_bezel(int win_w, int win_h, int dst_x, int dst_y, int dst_w,
+                       int dst_h) {
   /* Palette */
   const Uint8 BG_R = 235, BG_G = 235, BG_B = 237; /* light grey  */
-  const Uint8 TX_R =  22, TX_G =  22, TX_B =  28; /* near-black text */
-  const Uint8 LN_R = 195, LN_G =  28, LN_B =  38; /* Jupiter ACE red */
+  const Uint8 TX_R = 22, TX_G = 22, TX_B = 28;    /* near-black text */
+  const Uint8 LN_R = 195, LN_G = 28, LN_B = 38;   /* Jupiter ACE red */
 
   /* 1. Fill background */
   SDL_SetRenderDrawColor(sdl_renderer, BG_R, BG_G, BG_B, 255);
@@ -954,16 +942,17 @@ draw_bezel(int win_w, int win_h, int dst_x, int dst_y, int dst_w, int dst_h)
 
   /* 2. Subtle double-line inset border around the emulated screen */
   SDL_SetRenderDrawColor(sdl_renderer, 160, 160, 162, 255);
-  SDL_Rect r1 = { dst_x - 3, dst_y - 3, dst_w + 6, dst_h + 6 };
+  SDL_Rect r1 = {dst_x - 3, dst_y - 3, dst_w + 6, dst_h + 6};
   SDL_RenderDrawRect(sdl_renderer, &r1);
   /* Inner screen border: 2px dark grey outline around emulated screen */
   SDL_SetRenderDrawColor(sdl_renderer, 60, 58, 55, 255);
-  SDL_Rect outline = { dst_x - 2, dst_y - 2, dst_w + 4, dst_h + 4 };
+  SDL_Rect outline = {dst_x - 2, dst_y - 2, dst_w + 4, dst_h + 4};
   SDL_RenderDrawRect(sdl_renderer, &outline);
 
   /* Horizontal padding from left: ~4% of window width */
   int pad_l = (int)(win_w * 0.04f);
-  if (pad_l < 8) pad_l = 8;
+  if (pad_l < 8)
+    pad_l = 8;
 
   int logo_rendered_w = 0;
 
@@ -971,11 +960,12 @@ draw_bezel(int win_w, int win_h, int dst_x, int dst_y, int dst_w, int dst_h)
   if (bezel_logo_texture && bezel_logo_w > 0 && bezel_logo_h > 0) {
     /* Scale logo height to fit ~70% of top bezel height (dst_y) */
     int target_h = (int)(dst_y * 0.70f);
-    if (target_h < 12) target_h = 12;
+    if (target_h < 12)
+      target_h = 12;
     int target_w = (int)((float)bezel_logo_w * target_h / bezel_logo_h);
 
     int logo_y = (dst_y - target_h) / 2;
-    SDL_Rect logo_rect = { pad_l, logo_y, target_w, target_h };
+    SDL_Rect logo_rect = {pad_l, logo_y, target_w, target_h};
     SDL_RenderCopy(sdl_renderer, bezel_logo_texture, NULL, &logo_rect);
   }
 }
@@ -983,19 +973,21 @@ draw_bezel(int win_w, int win_h, int dst_x, int dst_y, int dst_w, int dst_h)
 /* --------------------------------------------------------------------------
  * Screen refresh
  * -------------------------------------------------------------------------- */
-void
-refresh(void)
-{
+void refresh(void) {
   unsigned char *video_ram, *charset;
   int x, y, c, inv;
   int xmin, ymin, xmax, ymax;
   int video_ram_old_ofs;
 
-  charset   = mem + 0x2c00;
+  charset = mem + 0x2c00;
   video_ram = mem + 0x2400;
-  xmin = 31; ymin = 23; xmax = 0; ymax = 0;
+  xmin = 31;
+  ymin = 23;
+  xmax = 0;
+  ymax = 0;
 
-  if (video_ram - mem > 0xf000) video_ram = mem + 0xf000;
+  if (video_ram - mem > 0xf000)
+    video_ram = mem + 0xf000;
 
   video_ram_old_ofs = 0;
   for (y = 0; y < 24; y++) {
@@ -1003,19 +995,26 @@ refresh(void)
       c = *video_ram;
       if (c != video_ram_old[video_ram_old_ofs] || refresh_screen) {
         video_ram_old[video_ram_old_ofs] = c;
-        if (x < xmin) xmin = x;
-        if (y < ymin) ymin = y;
-        if (x > xmax) xmax = x;
-        if (y > ymax) ymax = y;
+        if (x < xmin)
+          xmin = x;
+        if (y < ymin)
+          ymin = y;
+        if (x > xmax)
+          xmax = x;
+        if (y > ymax)
+          ymax = y;
         inv = c & 128;
-        c  &= 127;
+        c &= 127;
         set_image_character(x, y, inv, charset + c * 8);
       }
     }
   }
 
   if (refresh_screen) {
-    xmin = 0; ymin = 0; xmax = 31; ymax = 23;
+    xmin = 0;
+    ymin = 0;
+    xmax = 31;
+    ymax = 23;
   }
 
   if (xmax >= xmin && ymax >= ymin) {
@@ -1034,7 +1033,7 @@ refresh(void)
 
     /* Border sizes in renderer pixels */
     int bside = (int)(BORDER_SIDE * px_ratio);
-    int btop  = (int)(BORDER_TOP  * px_ratio);
+    int btop = (int)(BORDER_TOP * px_ratio);
 
     int avail_w = win_w - bside * 2;
     int avail_h = win_h - btop - bside;
@@ -1042,7 +1041,7 @@ refresh(void)
     /* Scale to fill available area, preserving 4:3 ACE aspect ratio */
     float scale_x = (float)avail_w / hsize;
     float scale_y = (float)avail_h / vsize;
-    float scale   = (scale_x < scale_y) ? scale_x : scale_y;
+    float scale = (scale_x < scale_y) ? scale_x : scale_y;
 
     int dst_w = (int)(hsize * scale);
     int dst_h = (int)(vsize * scale);
@@ -1050,12 +1049,26 @@ refresh(void)
     int dst_x = (win_w - dst_w) / 2;
     int dst_y = btop + (avail_h - dst_h) / 2;
 
-    SDL_Rect dst = { dst_x, dst_y, dst_w, dst_h };
-
-    /* Draw the Jupiter ACE bezel (cream + red stripes + text) */
+    /* Draw outer case bezel */
     draw_bezel(win_w, win_h, dst_x, dst_y, dst_w, dst_h);
 
+    /* Fill screen aperture with black (acts as display bezel housing) */
+    SDL_Rect screen_area = {dst_x, dst_y, dst_w, dst_h};
+    SDL_SetRenderDrawColor(sdl_renderer, 0, 0, 0, 255);
+    SDL_RenderFillRect(sdl_renderer, &screen_area);
+
+    /* Inset active display area inside the black screen housing */
+    int margin = (int)(16 * scale / SCALE);
+    if (margin < 8) margin = 8;
+
+    int active_w = dst_w - margin * 2;
+    int active_h = dst_h - margin * 2;
+    int active_x = dst_x + margin;
+    int active_y = dst_y + margin;
+
+    SDL_Rect dst = {active_x, active_y, active_w, active_h};
     SDL_RenderCopy(sdl_renderer, sdl_texture, NULL, &dst);
+
     SDL_RenderPresent(sdl_renderer);
   }
 
@@ -1065,9 +1078,7 @@ refresh(void)
 /* --------------------------------------------------------------------------
  * Closedown
  * -------------------------------------------------------------------------- */
-void
-closedown(void)
-{
+void closedown(void) {
   if (sdl_audio_device) {
     SDL_CloseAudioDevice(sdl_audio_device);
     sdl_audio_device = 0;
@@ -1078,8 +1089,11 @@ closedown(void)
     SDL_DestroyTexture(bezel_logo_texture);
     bezel_logo_texture = NULL;
   }
-  if (sdl_texture)  SDL_DestroyTexture(sdl_texture);
-  if (sdl_renderer) SDL_DestroyRenderer(sdl_renderer);
-  if (sdl_window)   SDL_DestroyWindow(sdl_window);
+  if (sdl_texture)
+    SDL_DestroyTexture(sdl_texture);
+  if (sdl_renderer)
+    SDL_DestroyRenderer(sdl_renderer);
+  if (sdl_window)
+    SDL_DestroyWindow(sdl_window);
   SDL_Quit();
 }

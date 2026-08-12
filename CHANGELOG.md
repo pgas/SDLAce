@@ -7,6 +7,7 @@ All notable changes to SDLAce are documented here.
 ## [0.8] — 2026
 
 ### Changed
+- **Black Display Margin**: Added an inner black margin inset surrounding the active Jupiter Ace text display area inside the dark screen housing.
 - **Removed `SDL_ttf` dependency**: Replaced font-based bezel text rendering with direct logo image rendering (`images/ace.png`) loaded via `stb_image.h`. Project build dependencies are now strictly **SDL2-only**.
 
 ### Added
