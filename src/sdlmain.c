@@ -526,37 +526,78 @@ out(int h, int l, int a)
 void
 fix_tstates(void)
 {
-  if (tsmax == 62500 && sdl_audio_device != 0) {
-    unsigned int last_s = (last_speaker_tstates * SAMPLES_PER_FRAME) / 62500;
-    if (last_s > SAMPLES_PER_FRAME) last_s = SAMPLES_PER_FRAME;
-    float val = speaker_diaphragm_pos ? 0.15f : -0.15f;
-    for (unsigned int i = last_s; i < SAMPLES_PER_FRAME; i++) {
-      audio_buffer[i] = val;
-    }
+  if (tsmax == 62500) {
+    /* 1. Generate audio for this 50Hz frame (62,500 t-states) */
+    if (sdl_audio_device != 0) {
+      unsigned int last_s = (last_speaker_tstates * SAMPLES_PER_FRAME) / 62500;
+      if (last_s > SAMPLES_PER_FRAME) last_s = SAMPLES_PER_FRAME;
+      float val = speaker_diaphragm_pos ? 0.15f : -0.15f;
+      for (unsigned int i = last_s; i < SAMPLES_PER_FRAME; i++) {
+        audio_buffer[i] = val;
+      }
 
-    // Apply DC blocker filter to eliminate pops/crackles when idle or during underflows
-    float prev_x = dc_blocker_prev_x;
-    float prev_y = dc_blocker_prev_y;
-    for (unsigned int i = 0; i < SAMPLES_PER_FRAME; i++) {
-      float x = audio_buffer[i];
-      float y = x - prev_x + 0.995f * prev_y;
-      prev_x = x;
-      prev_y = y;
-      audio_buffer[i] = y;
-    }
-    dc_blocker_prev_x = prev_x;
-    dc_blocker_prev_y = prev_y;
+      /* Apply DC blocker filter to eliminate pops/crackles */
+      float prev_x = dc_blocker_prev_x;
+      float prev_y = dc_blocker_prev_y;
+      for (unsigned int i = 0; i < SAMPLES_PER_FRAME; i++) {
+        float x = audio_buffer[i];
+        float y = x - prev_x + 0.995f * prev_y;
+        prev_x = x;
+        prev_y = y;
+        audio_buffer[i] = y;
+      }
+      dc_blocker_prev_x = prev_x;
+      dc_blocker_prev_y = prev_y;
 
-    Uint32 queued_bytes = SDL_GetQueuedAudioSize(sdl_audio_device);
-    if (queued_bytes < SAMPLES_PER_FRAME * sizeof(float) * 3) {
+      /* Queue audio */
       SDL_QueueAudio(sdl_audio_device, audio_buffer, SAMPLES_PER_FRAME * sizeof(float));
+      last_speaker_tstates = 0;
     }
 
-    last_speaker_tstates = 0;
+    /* 2. Trigger Z80 50Hz maskable interrupt for screen refresh & timing */
+    if (interrupted == 0) {
+      interrupted = 1;
+    }
+
+    /* 3. Frame pacing: audio queue throttle + high-resolution wall-clock fallback */
+    static Uint64 next_frame_counter = 0;
+    Uint64 perf_freq = SDL_GetPerformanceFrequency();
+    Uint64 ticks_per_frame = perf_freq / 50;
+    Uint64 now = SDL_GetPerformanceCounter();
+
+    /* Audio queue throttling: sleep if audio queue exceeds 2 frames (~40ms buffer) */
+    if (sdl_audio_device != 0) {
+      Uint32 queued_bytes = SDL_GetQueuedAudioSize(sdl_audio_device);
+      Uint32 target_bytes = SAMPLES_PER_FRAME * sizeof(float) * 2;
+      if (queued_bytes > target_bytes) {
+        Uint32 excess_bytes = queued_bytes - target_bytes;
+        Uint32 sleep_ms = (excess_bytes * 1000) / (AUDIO_SAMPLE_RATE * sizeof(float));
+        if (sleep_ms >= 1) {
+          SDL_Delay(sleep_ms);
+        }
+      }
+    }
+
+    /* High-resolution wall-clock pacing fallback */
+    now = SDL_GetPerformanceCounter();
+    if (next_frame_counter == 0 || now > next_frame_counter + ticks_per_frame * 5) {
+      next_frame_counter = now + ticks_per_frame;
+    } else {
+      if (now < next_frame_counter) {
+        Uint64 diff = next_frame_counter - now;
+        Uint32 sleep_ms = (Uint32)((diff * 1000) / perf_freq);
+        if (sleep_ms >= 1) {
+          SDL_Delay(sleep_ms);
+        }
+        while (SDL_GetPerformanceCounter() < next_frame_counter) {
+          /* Sub-millisecond spin-wait for exact frame timing */
+        }
+      }
+      next_frame_counter += ticks_per_frame;
+    }
   }
 
   tstates = 0;
-  pause();
 }
 
 /* --------------------------------------------------------------------------

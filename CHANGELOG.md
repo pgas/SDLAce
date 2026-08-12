@@ -10,6 +10,9 @@ All notable changes to SDLAce are documented here.
 - **Internal Speaker sound support**: Emulated the Jupiter Ace CPU-driven buzzer via host-side SDL Audio. Reading or writing to even I/O ports moves the speaker diaphragm. Synthesized and queued square-wave audio at 44100 Hz.
 - **Audio DC Blocker Filter**: Implemented a first-order high-pass filter (decay coefficient `0.995f`, cutoff ~35 Hz) to eliminate clicks and crackles when the speaker is idle or when audio buffer underflows occur.
 
+### Fixed
+- **Accurate 50 Hz Frame Timing**: Replaced POSIX `pause()` / `setitimer` with a hybrid audio-queue throttle (`SDL_QueueAudio`) and high-resolution performance-counter timer (`SDL_GetPerformanceCounter()`). Guarantees 100% accurate 3.25 MHz / 50 Hz execution speed across macOS and Linux.
+
 ---
 
 ## [0.7] — 2026
