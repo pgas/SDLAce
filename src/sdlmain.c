@@ -109,6 +109,48 @@ static Uint32 col_white = 0;
 static int invert = 0;
 
 /* --------------------------------------------------------------------------
+ * Audio state
+ * -------------------------------------------------------------------------- */
+static SDL_AudioDeviceID sdl_audio_device = 0;
+#define AUDIO_SAMPLE_RATE 44100
+#define CYCLES_PER_FRAME  62500
+#define SAMPLES_PER_FRAME (AUDIO_SAMPLE_RATE / 50) /* 882 */
+
+static int speaker_diaphragm_pos = 0; /* 0 or 1 */
+static unsigned long last_speaker_tstates = 0;
+static float audio_buffer[SAMPLES_PER_FRAME];
+static float dc_blocker_prev_x = 0.0f;
+static float dc_blocker_prev_y = 0.0f;
+
+static void
+set_speaker_diaphragm(int pos)
+{
+  if (tsmax != 62500 || sdl_audio_device == 0) {
+    speaker_diaphragm_pos = pos;
+    return;
+  }
+
+  unsigned long current_t = tstates;
+  if (current_t < last_speaker_tstates) {
+    last_speaker_tstates = 0;
+  }
+  if (current_t > 62500) current_t = 62500;
+
+  unsigned int last_s = (last_speaker_tstates * SAMPLES_PER_FRAME) / 62500;
+  unsigned int current_s = (current_t * SAMPLES_PER_FRAME) / 62500;
+
+  if (current_s > SAMPLES_PER_FRAME) current_s = SAMPLES_PER_FRAME;
+
+  float val = speaker_diaphragm_pos ? 0.15f : -0.15f;
+  for (unsigned int i = last_s; i < current_s; i++) {
+    audio_buffer[i] = val;
+  }
+
+  speaker_diaphragm_pos = pos;
+  last_speaker_tstates = current_t;
+}
+
+/* --------------------------------------------------------------------------
  * Prototypes
  * -------------------------------------------------------------------------- */
 void loadrom(unsigned char *x);
@@ -450,6 +492,9 @@ loadrom(unsigned char *x)
 unsigned int
 in(int h, int l)
 {
+  if ((l & 1) == 0) {
+    set_speaker_diaphragm(0);
+  }
   if (l == 0xfe) /* keyboard */
     switch (h) {
       case 0xfe: return keyboard_get_keyport(0);
@@ -468,7 +513,10 @@ in(int h, int l)
 unsigned int
 out(int h, int l, int a)
 {
-  (void)h; (void)l; (void)a;
+  if ((l & 1) == 0) {
+    set_speaker_diaphragm(1);
+  }
+  (void)h; (void)a;
   return 0;
 }
 
@@ -478,6 +526,35 @@ out(int h, int l, int a)
 void
 fix_tstates(void)
 {
+  if (tsmax == 62500 && sdl_audio_device != 0) {
+    unsigned int last_s = (last_speaker_tstates * SAMPLES_PER_FRAME) / 62500;
+    if (last_s > SAMPLES_PER_FRAME) last_s = SAMPLES_PER_FRAME;
+    float val = speaker_diaphragm_pos ? 0.15f : -0.15f;
+    for (unsigned int i = last_s; i < SAMPLES_PER_FRAME; i++) {
+      audio_buffer[i] = val;
+    }
+
+    // Apply DC blocker filter to eliminate pops/crackles when idle or during underflows
+    float prev_x = dc_blocker_prev_x;
+    float prev_y = dc_blocker_prev_y;
+    for (unsigned int i = 0; i < SAMPLES_PER_FRAME; i++) {
+      float x = audio_buffer[i];
+      float y = x - prev_x + 0.995f * prev_y;
+      prev_x = x;
+      prev_y = y;
+      audio_buffer[i] = y;
+    }
+    dc_blocker_prev_x = prev_x;
+    dc_blocker_prev_y = prev_y;
+
+    Uint32 queued_bytes = SDL_GetQueuedAudioSize(sdl_audio_device);
+    if (queued_bytes < SAMPLES_PER_FRAME * sizeof(float) * 3) {
+      SDL_QueueAudio(sdl_audio_device, audio_buffer, SAMPLES_PER_FRAME * sizeof(float));
+    }
+
+    last_speaker_tstates = 0;
+  }
+
   tstates = 0;
   pause();
 }
@@ -523,9 +600,25 @@ do_interrupt(void)
 void
 startup(void)
 {
-  if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_TIMER) != 0) {
+  if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_TIMER | SDL_INIT_AUDIO) != 0) {
     fprintf(stderr, "SDL_Init failed: %s\n", SDL_GetError());
     exit(1);
+  }
+
+  /* Open SDL Audio Device */
+  SDL_AudioSpec wanted;
+  SDL_zero(wanted);
+  wanted.freq = AUDIO_SAMPLE_RATE;
+  wanted.format = AUDIO_F32SYS;
+  wanted.channels = 1;
+  wanted.samples = 1024;
+  wanted.callback = NULL;
+
+  sdl_audio_device = SDL_OpenAudioDevice(NULL, 0, &wanted, NULL, 0);
+  if (sdl_audio_device != 0) {
+    SDL_PauseAudioDevice(sdl_audio_device, 0); /* start playing */
+  } else {
+    fprintf(stderr, "Warning: SDL_OpenAudioDevice failed: %s\n", SDL_GetError());
   }
 
   /* Register one custom event type for macOS menu actions */
@@ -1028,6 +1121,10 @@ refresh(void)
 void
 closedown(void)
 {
+  if (sdl_audio_device) {
+    SDL_CloseAudioDevice(sdl_audio_device);
+    sdl_audio_device = 0;
+  }
   tape_clear_observers();
   free(pixel_buf);
   if (bezel_font_jupiter) TTF_CloseFont(bezel_font_jupiter);

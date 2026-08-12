@@ -3,7 +3,7 @@ cmake_minimum_required(VERSION 3.10)
 
 project("SDLAce")
 
-add_definitions(-DSCALE=2 -DWHITE_ON_BLACK -DXACE_VERSION=\"0.7\")
+add_definitions(-DSCALE=2 -DWHITE_ON_BLACK -DXACE_VERSION=\"0.8\")
 
 # ---- SDL2 build (only backend) ----------------------------------------
 
@@ -73,8 +73,8 @@ if(APPLE)
   set_target_properties(sdlace PROPERTIES
     MACOSX_BUNDLE_BUNDLE_NAME "SDLAce"
     MACOSX_BUNDLE_GUI_IDENTIFIER "org.sdlace.emulator"
-    MACOSX_BUNDLE_BUNDLE_VERSION "0.7"
-    MACOSX_BUNDLE_SHORT_VERSION_STRING "0.7"
+    MACOSX_BUNDLE_BUNDLE_VERSION "0.8"
+    MACOSX_BUNDLE_SHORT_VERSION_STRING "0.8"
     MACOSX_BUNDLE_ICON_FILE "sdlace.icns"
     OUTPUT_NAME "SDLAce"
   )
