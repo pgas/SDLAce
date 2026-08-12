@@ -31,6 +31,7 @@ unsigned char *memptr[8] = {
   test_mem_page, test_mem_page, test_mem_page, test_mem_page
 };
 int memattr[8] = {0, 1, 1, 1, 1, 1, 1, 1};
+unsigned long tstates = 0;
 
 /* Generate a block of data to save and compare */
 static void

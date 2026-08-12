@@ -113,7 +113,7 @@ static int invert = 0;
  * -------------------------------------------------------------------------- */
 static SDL_AudioDeviceID sdl_audio_device = 0;
 #define AUDIO_SAMPLE_RATE 44100
-#define CYCLES_PER_FRAME  62500
+#define CYCLES_PER_FRAME  65000
 #define SAMPLES_PER_FRAME (AUDIO_SAMPLE_RATE / 50) /* 882 */
 
 static int speaker_diaphragm_pos = 0; /* 0 or 1 */
@@ -125,7 +125,7 @@ static float dc_blocker_prev_y = 0.0f;
 static void
 set_speaker_diaphragm(int pos)
 {
-  if (tsmax != 62500 || sdl_audio_device == 0) {
+  if (tsmax != CYCLES_PER_FRAME || sdl_audio_device == 0) {
     speaker_diaphragm_pos = pos;
     return;
   }
@@ -134,10 +134,10 @@ set_speaker_diaphragm(int pos)
   if (current_t < last_speaker_tstates) {
     last_speaker_tstates = 0;
   }
-  if (current_t > 62500) current_t = 62500;
+  if (current_t > CYCLES_PER_FRAME) current_t = CYCLES_PER_FRAME;
 
-  unsigned int last_s = (last_speaker_tstates * SAMPLES_PER_FRAME) / 62500;
-  unsigned int current_s = (current_t * SAMPLES_PER_FRAME) / 62500;
+  unsigned int last_s = (last_speaker_tstates * SAMPLES_PER_FRAME) / CYCLES_PER_FRAME;
+  unsigned int current_s = (current_t * SAMPLES_PER_FRAME) / CYCLES_PER_FRAME;
 
   if (current_s > SAMPLES_PER_FRAME) current_s = SAMPLES_PER_FRAME;
 
@@ -234,8 +234,8 @@ static void
 normal_speed(void)
 {
   set_itimer(50);   /* 50 ints/sec */
-  scrn_freq = 4;
-  tsmax = 62500;
+  scrn_freq = 1;    /* refresh screen every 50Hz frame */
+  tsmax = CYCLES_PER_FRAME; /* 3.25 MHz CPU: 65,000 t-states per 50Hz frame */
 }
 
 static void
@@ -526,10 +526,10 @@ out(int h, int l, int a)
 void
 fix_tstates(void)
 {
-  if (tsmax == 62500) {
-    /* 1. Generate audio for this 50Hz frame (62,500 t-states) */
+  if (tsmax == CYCLES_PER_FRAME) {
+    /* 1. Generate audio for this 50Hz frame (65,000 t-states) */
     if (sdl_audio_device != 0) {
-      unsigned int last_s = (last_speaker_tstates * SAMPLES_PER_FRAME) / 62500;
+      unsigned int last_s = (last_speaker_tstates * SAMPLES_PER_FRAME) / CYCLES_PER_FRAME;
       if (last_s > SAMPLES_PER_FRAME) last_s = SAMPLES_PER_FRAME;
       float val = speaker_diaphragm_pos ? 0.15f : -0.15f;
       for (unsigned int i = last_s; i < SAMPLES_PER_FRAME; i++) {

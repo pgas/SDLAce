@@ -28,6 +28,7 @@ extern int memattr[];
 extern int hsize,vsize;
 extern volatile int interrupted;
 extern int reset_ace;
+extern unsigned long tstates, tsmax;
 
 extern unsigned int in(int h, int l);
 extern unsigned int out(int h,int l, int a);
@@ -44,11 +45,13 @@ extern void fix_tstates(void);
   int attr=memattr[page];\
   if (attr) {\
     memptr[page][off]=(y); \
-    if ((x>=0x2000&&x<=0x23ff)||(x>=0x2800&&x<=0x2bff)) \
+    if ((x>=0x2000&&x<=0x23ff)||(x>=0x2800&&x<=0x2bff)) {\
       memptr[page][off+0x400]=(y); \
-    else if ((x>=0x2400&&x<=0x27ff)||(x>=0x2c00&&x<=0x2fff)) \
+      tstates += 1;\
+    } else if ((x>=0x2400&&x<=0x27ff)||(x>=0x2c00&&x<=0x2fff)) {\
       memptr[page][off-0x400]=(y); \
-    else if (x>=0x3000&&x<=0x3fff) { \
+      tstates += 1;\
+    } else if (x>=0x3000&&x<=0x3fff) { \
       memptr[page][(x&0x03ff)+0x1000]=(y); \
       memptr[page][(x&0x03ff)+0x1400]=(y); \
       memptr[page][(x&0x03ff)+0x1800]=(y); \

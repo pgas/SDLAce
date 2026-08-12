@@ -12,6 +12,9 @@ All notable changes to SDLAce are documented here.
 
 ### Fixed
 - **Accurate 50 Hz Frame Timing**: Replaced POSIX `pause()` / `setitimer` with a hybrid audio-queue throttle (`SDL_QueueAudio`) and high-resolution performance-counter timer (`SDL_GetPerformanceCounter()`). Guarantees 100% accurate 3.25 MHz / 50 Hz execution speed across macOS and Linux.
+- **Hardware-Accurate 3.25 MHz CPU Clock**: Calibrated frame cycle budget to 65,000 t-states per 50 Hz frame (`CYCLES_PER_FRAME = 65000`), matching real Jupiter Ace hardware timing.
+- **ULA Video RAM Bus Contention**: Added wait-state bus contention delay for accesses to Video/Char RAM (`0x2000–0x27FF`) in `src/z80.h`.
+- **Full 50 Hz Display Refresh**: Configured `scrn_freq = 1` for 50 FPS screen updates without legacy frame skipping.
 
 ---
 
