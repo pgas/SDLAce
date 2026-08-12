@@ -24,6 +24,7 @@ push_ace_event(int code, void *data1)
 }
 
 static void on_paste(GtkWidget *w, gpointer data) { push_ace_event(ACE_EVENT_PASTE, NULL); }
+static void on_rewind_tape(GtkWidget *w, gpointer data) { push_ace_event(ACE_EVENT_REWIND_TAPE, NULL); }
 static void on_delete_line(GtkWidget *w, gpointer data) { push_ace_event(ACE_EVENT_DELETE_LINE, NULL); }
 static void on_inverse_video(GtkWidget *w, gpointer data) { push_ace_event(ACE_EVENT_INVERSE_VIDEO, NULL); }
 static void on_graphics(GtkWidget *w, gpointer data) { push_ace_event(ACE_EVENT_GRAPHICS, NULL); }
@@ -37,6 +38,20 @@ static void on_attach_tape(GtkWidget *w, gpointer data) {
                                                     "_Cancel", GTK_RESPONSE_CANCEL,
                                                     "_Open", GTK_RESPONSE_ACCEPT,
                                                     NULL);
+
+    GtkFileFilter *filter = gtk_file_filter_new();
+    gtk_file_filter_set_name(filter, "Tape Images (*.tap, *.tzx)");
+    gtk_file_filter_add_pattern(filter, "*.tap");
+    gtk_file_filter_add_pattern(filter, "*.TAP");
+    gtk_file_filter_add_pattern(filter, "*.tzx");
+    gtk_file_filter_add_pattern(filter, "*.TZX");
+    gtk_file_chooser_add_filter(GTK_FILE_CHOOSER(dialog), filter);
+
+    GtkFileFilter *all_filter = gtk_file_filter_new();
+    gtk_file_filter_set_name(all_filter, "All Files");
+    gtk_file_filter_add_pattern(all_filter, "*");
+    gtk_file_chooser_add_filter(GTK_FILE_CHOOSER(dialog), all_filter);
+
     if (gtk_dialog_run(GTK_DIALOG(dialog)) == GTK_RESPONSE_ACCEPT) {
         char *filename = gtk_file_chooser_get_filename(GTK_FILE_CHOOSER(dialog));
         push_ace_event(ACE_EVENT_ATTACH_TAPE, strdup(filename));
@@ -139,6 +154,10 @@ void* linux_create_window(int width, int height, const char* title, Uint32 user_
     GtkWidget *attach_item = gtk_menu_item_new_with_label("Attach Tape... (F3)");
     g_signal_connect(attach_item, "activate", G_CALLBACK(on_attach_tape), NULL);
     gtk_menu_shell_append(GTK_MENU_SHELL(file_menu), attach_item);
+    
+    GtkWidget *rewind_item = gtk_menu_item_new_with_label("Rewind Tape (F6)");
+    g_signal_connect(rewind_item, "activate", G_CALLBACK(on_rewind_tape), NULL);
+    gtk_menu_shell_append(GTK_MENU_SHELL(file_menu), rewind_item);
     
     GtkWidget *spool_item = gtk_menu_item_new_with_label("Spool... (F5)");
     g_signal_connect(spool_item, "activate", G_CALLBACK(on_spool), NULL);

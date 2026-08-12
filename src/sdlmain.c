@@ -323,6 +323,11 @@ handle_cli_args(int argc, char **argv)
         spooler_open(argv[arg_pos]);
       else
         fprintf(stderr, "Error: Missing filename for %s arg\n", cli_switch);
+    } else if (strcasecmp("-t", cli_switch) == 0) {
+      if (++arg_pos < argc)
+        tape_attach(argv[arg_pos]);
+      else
+        fprintf(stderr, "Error: Missing filename for %s arg\n", cli_switch);
     }
     arg_pos++;
   }
@@ -665,6 +670,9 @@ check_events(void)
           break;
         case ACE_EVENT_ATTACH_TAPE:
           if (path) { tape_attach(path); free(path); }
+          break;
+        case ACE_EVENT_REWIND_TAPE:
+          tape_rewind();
           break;
         case ACE_EVENT_INVERSE_VIDEO:
           keyboard_keypress(SDLK_F4, 0);

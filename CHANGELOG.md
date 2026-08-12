@@ -4,6 +4,16 @@ All notable changes to SDLAce are documented here.
 
 ---
 
+## [0.7] — 2026
+
+### Added
+- **Rewind Tape** shortcut: `F6` / `⌘6` to re-attach (rewind) the current tape.
+
+### Fixed
+- **Tape loading memory mirroring**: Fixed an issue where tape blocks loaded into mirrored memory regions (e.g., `0x2000-0x23FF`) were incorrectly bypassing the Z80 memory mirror logic. `bload` and Forth dictionary auto-execution now work accurately.
+
+---
+
 ## [0.6-sdl] — 2026 (SDL2 port by Pierre Gaston)
 
 ### Added

@@ -47,8 +47,9 @@ void tape_clear_observers(void);
 void tape_add_observer(TapeObserver tape_observer);
 extern void tape_patches(char *mem);
 extern FILE* tape_attach(char *filename);
+extern void tape_rewind(void);
 extern void tape_detach();
-extern void tape_load_p(char *mem, int block_dest_offset);
+extern int tape_load_p(char *mem, int block_dest_offset, int req_len, int flag_byte);
 extern void tape_save_p(char *mem, int block_size);
 
 #endif

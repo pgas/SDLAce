@@ -35,9 +35,9 @@ static int tape_eof(void);
 static void tape_rewind_to_start(void);
 static void tape_attach_empty_tape(char load_type);
 static void tape_extract_filename(char *filename, char *mem);
-static void tape_load_block(char *mem, int block_dest_offset);
+static void tape_load_block(char *mem, int block_dest_offset, int req_len);
 static void tape_skip_block(void);
-static void tape_load_empty_tape_block(char *mem, int block_dest_offset);
+static void tape_load_empty_tape_block(char *mem, int block_dest_offset, int req_len);
 static void tape_truncate(void);
 static void tape_save_block(char *block, int block_size);
 static char tape_calc_checksum(char *data, int data_size);
@@ -151,10 +151,11 @@ tape_detach(void)
   }
 }
 
-void
-tape_load_p(char *mem, int block_dest_offset)
+int
+tape_load_p(char *mem, int block_dest_offset, int req_len, int flag_byte)
 {
   char found_filename[11];
+  char requested_filename[11];
   static int load_header = 1;
   char message[TAPE_MAX_MESSAGE_SIZE] = "";
 
@@ -162,30 +163,38 @@ tape_load_p(char *mem, int block_dest_offset)
     tape_notify_observers(TAPE_MESSAGE, "End of tape reached.  Rewinding.");
     tape_rewind_to_start();
     load_header = 1;
+    return 0;
+  }
+
+  if (!tape_fp) {
+    return 0;
   }
 
   if (load_header) {
-    tape_attach_empty_tape(mem[9985]);
+    /* Reading a header block. Extract the user's requested filename
+       from the system area at mem[9985] (0x2701). */
     tape_extract_filename(requested_filename, mem+9985+1);
     sprintf(message, "Searching for file: %s", requested_filename);
     tape_notify_observers(TAPE_MESSAGE, message);
 
-    tape_load_block(mem, block_dest_offset);
+    tape_load_block(mem, block_dest_offset, req_len);
     tape_extract_filename(found_filename, mem+block_dest_offset+1);
     if (strcmp(requested_filename, found_filename) != 0) {
       sprintf(message, "Skipping file: %s", found_filename);
-      tape_skip_block();
+      tape_skip_block();  /* skip the data block for this non-matching file */
     } else {
       sprintf(message, "Found file: %s", found_filename);
       load_header = 0;
     }
   } else {
-    tape_load_block(mem, block_dest_offset);
+    /* Reading the data block for the matched file */
+    tape_load_block(mem, block_dest_offset, req_len);
     sprintf(message, "Load complete.");
     load_header = 1;
   }
 
   tape_notify_observers(TAPE_MESSAGE, message);
+  return 1;
 }
 
 void
@@ -286,31 +295,44 @@ tape_extract_filename(char *filename, char *mem)
 }
 
 static void
-tape_load_empty_tape_block(char *mem, int block_dest_offset)
+tape_load_empty_tape_block(char *mem, int block_dest_offset, int req_len)
 {
   int block_size;
 
   block_size = empty_tape[empty_tape_pos++];
   block_size += empty_tape[empty_tape_pos++] << 8;
-  memcpy(mem+block_dest_offset, &empty_tape[empty_tape_pos], block_size);
+  int to_read = (block_size < req_len) ? block_size : req_len;
+  memcpy(mem+block_dest_offset, &empty_tape[empty_tape_pos], to_read);
   empty_tape_pos += block_size;
 }
 
 static void
-tape_load_block(char *mem, int block_dest_offset)
+tape_load_block(char *mem, int block_dest_offset, int req_len)
 {
   int block_size;
 
   if (tape_fp) {
-    block_size = fgetc(tape_fp);
-    if (!feof(tape_fp)) {
+      block_size = fgetc(tape_fp);
       block_size += fgetc(tape_fp) << 8;
-      /* Read block less the checksum */
-      fread(mem+block_dest_offset, 1, block_size-1, tape_fp);
+      int tape_data_len = block_size - 1;
+      int to_read = (tape_data_len < req_len) ? tape_data_len : req_len;
+
+      /* Read into a temporary buffer, then write byte-by-byte through
+         storefunc() which handles Jupiter Ace memory mirroring.
+         Direct fread() into mem[] bypasses mirroring and breaks loading
+         into mirrored regions (0x2000-0x23FF, 0x2800-0x2BFF, 0x3000-0x3FFF). */
+      unsigned char tmpbuf[65536];
+      fread(tmpbuf, 1, to_read, tape_fp);
+      for (int i = 0; i < to_read; i++) {
+        store(block_dest_offset + i, tmpbuf[i]);
+      }
+
+      if (tape_data_len > req_len) {
+          fseek(tape_fp, tape_data_len - req_len, SEEK_CUR);
+      }
       fgetc(tape_fp); /* skip checksum */
-    }
   } else {
-    tape_load_empty_tape_block(mem, block_dest_offset);
+    tape_load_empty_tape_block(mem, block_dest_offset, req_len);
   }
 }
 
@@ -360,4 +382,9 @@ tape_calc_checksum(char *data, int data_size)
   }
 
   return checksum;
+}
+
+void tape_rewind(void) {
+    tape_rewind_to_start();
+    tape_notify_observers(TAPE_MESSAGE, "Tape rewound.");
 }

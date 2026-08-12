@@ -95,7 +95,7 @@ push_ace_event(int code, void *data1)
     /* allowedFileTypes is deprecated in macOS 12 but still works */
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wdeprecated-declarations"
-    panel.allowedFileTypes = @[@"tap", @"TAP"];
+    panel.allowedFileTypes = @[@"tap", @"TAP", @"tzx", @"TZX"];
 #pragma clang diagnostic pop
 
     if ([panel runModal] == NSModalResponseOK) {
@@ -104,6 +104,12 @@ push_ace_event(int code, void *data1)
             push_ace_event(ACE_EVENT_ATTACH_TAPE, strdup(utf8));
         }
     }
+}
+
+- (void)acRewindTape:(id)sender
+{
+    (void)sender;
+    push_ace_event(ACE_EVENT_REWIND_TAPE, NULL);
 }
 
 /* Shows an NSOpenPanel; posts ACE_EVENT_SPOOL with the chosen path. */
@@ -236,6 +242,11 @@ macos_setup_menu(Uint32 user_event_type)
         make_item(actMenu,
                   @"Attach Tape Image…",
                   @selector(acAttachTape:), @"3", NSEventModifierFlagCommand, delegate);
+
+        /* Rewind Tape - Cmd-6 */
+        make_item(actMenu,
+                  @"Rewind Tape",
+                  @selector(acRewindTape:), @"6", NSEventModifierFlagCommand, delegate);
 
         /* Spool from File – Cmd-5 */
         make_item(actMenu,

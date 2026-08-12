@@ -76,6 +76,7 @@ open src/SDLAce.app
 | F2 | Reset |
 | F3 | Attach tape image (terminal prompt) |
 | F4 | Inverse Video |
+| F6 | Rewind Tape (Cmd-6 on macOS) |
 | F9 | Graphics mode |
 | F11 | Spool from file (terminal prompt) |
 | Esc | Break |

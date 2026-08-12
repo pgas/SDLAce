@@ -24,6 +24,14 @@
 
 #include "tape.h"
 
+/* Stubs for z80.h memory mapping used by store() in tape.c */
+static unsigned char test_mem_page[8192];
+unsigned char *memptr[8] = {
+  test_mem_page, test_mem_page, test_mem_page, test_mem_page,
+  test_mem_page, test_mem_page, test_mem_page, test_mem_page
+};
+int memattr[8] = {0, 1, 1, 1, 1, 1, 1, 1};
+
 /* Generate a block of data to save and compare */
 static void
 generate_block(char *block, int num_bytes, int first_num)
@@ -208,7 +216,7 @@ test_tape_load_p_first_dict_on_tape()
   observer_status_init();
   tape_add_observer(observer);
 
-  tape_load_p(mem, 10);
+  tape_load_p(mem, 10, 10, 0);
   /* Check correct name is in memory */
   assert(memcmp(mem+10+1, mem+9986, 10) == 0);
 
@@ -219,7 +227,7 @@ test_tape_load_p_first_dict_on_tape()
   assert(observer_status.message_type == TAPE_MESSAGE);
   assert(strcmp(observer_status.message, "Found file: test") == 0);
 
-  tape_load_p(mem, 10000);
+  tape_load_p(mem, 10000, 10000, 0);
   /* Check data block is loaded */
   assert(mem[10000] == 0x54);
   assert(mem[10001] == 0x45);
@@ -254,7 +262,7 @@ test_tape_load_p_second_dict_on_tape()
   strncpy(mem+9986, filename_on_tape, 10);
 
   /* Skip first dictionary */
-  tape_load_p(mem, 10);
+  tape_load_p(mem, 10, 10, 0);
 
   assert(observer_status.observer_called == 1);
   assert(observer_status.tape_attached == 1);
@@ -264,7 +272,7 @@ test_tape_load_p_second_dict_on_tape()
   assert(strcmp(observer_status.message, "Skipping file: test") == 0);
 
   /* Load the header block */
-  tape_load_p(mem, 10);
+  tape_load_p(mem, 10, 10, 0);
   /* Check correct name is in memory */
   assert(memcmp(mem+10+1, mem+9986, 10) == 0);
 
@@ -276,7 +284,7 @@ test_tape_load_p_second_dict_on_tape()
   assert(strcmp(observer_status.message, "Found file: test2") == 0);
 
   /* Load the data block */
-  tape_load_p(mem, 10000);
+  tape_load_p(mem, 10000, 10000, 0);
   /* Check data block is loaded */
   assert(mem[10000] == 0x54);
   assert(mem[10001] == 0x45);
@@ -366,8 +374,8 @@ test_tape_save_p_truncate()
   for(i = 0; i < 10; i++) {
     mem[9986+i] = mem[100+i];
   }
-  tape_load_p(mem, 1000);
-  tape_load_p(mem, 1150);
+  tape_load_p(mem, 1000, 1000, 0);
+  tape_load_p(mem, 1150, 1150, 0);
 
   /* Save 1 set of header and data blocks after the first 2 blocks */
   generate_block(mem+2000, 28, 'N');

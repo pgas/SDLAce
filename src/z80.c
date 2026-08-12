@@ -1,3 +1,5 @@
+#include <stdlib.h>
+#include <stdio.h>
 /* Emulation of the Z80 CPU with hooks into the other parts of xace.
  * Copyright (C) 1994 Ian Collier.
  * Z81 changes (C) 1995 Russell Marks.

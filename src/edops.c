@@ -508,8 +508,16 @@ endinstr;
 
 /* save/load patches */
 instr(0xfc,4);
-  tape_load_p(mem, hl);
-  f=(f&0xc4)|1|(a&0x28);  /* set carry */
+  if (tape_load_p(mem, hl, de, c)) {
+    unsigned int new_hl = (hl + de) & 0xffff;
+    f=(f&0xc4)|1|(a&0x28);  /* set carry */
+    h = new_hl >> 8;
+    l = new_hl & 0xff;
+    d = 0;
+    e = 0;
+  } else {
+    f=(f&0xc4)&~1|(a&0x28); /* clear carry */
+  }
 endinstr;
 
 instr(0xfd,4);
