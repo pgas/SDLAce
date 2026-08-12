@@ -42,7 +42,6 @@ Spectrum.
 | Dependency | macOS (Homebrew) | Linux |
 |------------|-----------------|-------|
 | SDL2       | `brew install sdl2` | `libsdl2-dev` |
-| SDL2_ttf   | `brew install sdl2_ttf` | `libsdl2-ttf-dev` |
 | CMake ≥ 3.14 | `brew install cmake` | `cmake` |
 
 ---

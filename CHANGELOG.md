@@ -6,6 +6,9 @@ All notable changes to SDLAce are documented here.
 
 ## [0.8] — 2026
 
+### Changed
+- **Removed `SDL_ttf` dependency**: Replaced font-based bezel text rendering with direct logo image rendering (`images/ace.png`) loaded via `stb_image.h`. Project build dependencies are now strictly **SDL2-only**.
+
 ### Added
 - **Internal Speaker sound support**: Emulated the Jupiter Ace CPU-driven buzzer via host-side SDL Audio. Reading or writing to even I/O ports moves the speaker diaphragm. Synthesized and queued square-wave audio at 44100 Hz.
 - **Audio DC Blocker Filter**: Implemented a first-order high-pass filter (decay coefficient `0.995f`, cutoff ~35 Hz) to eliminate clicks and crackles when the speaker is idle or when audio buffer underflows occur.

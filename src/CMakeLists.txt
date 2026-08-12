@@ -15,16 +15,7 @@ find_path(SDL2_INCLUDE_DIR SDL2/SDL.h
   HINTS /opt/homebrew/include /usr/local/include
   REQUIRED)
 
-# Locate SDL2_ttf for bezel text rendering
-find_library(SDL2_TTF_LIB SDL2_ttf
-  HINTS /opt/homebrew/lib /usr/local/lib
-  REQUIRED)
-find_path(SDL2_TTF_INCLUDE_DIR SDL2/SDL_ttf.h
-  HINTS /opt/homebrew/include /usr/local/include
-  REQUIRED)
-
-message(STATUS "SDL2     lib: ${SDL2_LIB}")
-message(STATUS "SDL2_ttf lib: ${SDL2_TTF_LIB}")
+message(STATUS "SDL2 lib: ${SDL2_LIB}")
 
 if(APPLE)
   set(PLATFORM_SOURCES macos_ui.m)
@@ -59,9 +50,8 @@ endif()
 target_compile_definitions(sdlace PRIVATE USE_SDL SDL_MAIN_HANDLED)
 target_include_directories(sdlace PRIVATE
   ${SDL2_INCLUDE_DIR}
-  ${SDL2_TTF_INCLUDE_DIR}
 )
-target_link_libraries(sdlace PRIVATE ${SDL2_LIB} ${SDL2_TTF_LIB})
+target_link_libraries(sdlace PRIVATE ${SDL2_LIB})
 
 if(NOT APPLE)
   target_link_libraries(sdlace PRIVATE PkgConfig::GTK3)
@@ -79,13 +69,14 @@ if(APPLE)
     OUTPUT_NAME "SDLAce"
   )
 
-  # Bundle the ROM and Icon
+  # Bundle the ROM, Icon, and Logo Image
   set(ROM_SRC "${CMAKE_SOURCE_DIR}/ace.rom")
   set(ICON_SRC "${CMAKE_SOURCE_DIR}/images/sdlace.icns")
-  set_source_files_properties(${ROM_SRC} ${ICON_SRC} PROPERTIES
+  set(LOGO_SRC "${CMAKE_SOURCE_DIR}/images/ace.png")
+  set_source_files_properties(${ROM_SRC} ${ICON_SRC} ${LOGO_SRC} PROPERTIES
     MACOSX_PACKAGE_LOCATION "Resources"
   )
-  target_sources(sdlace PRIVATE ${ROM_SRC} ${ICON_SRC})
+  target_sources(sdlace PRIVATE ${ROM_SRC} ${ICON_SRC} ${LOGO_SRC})
 endif()
 
 if(APPLE)
