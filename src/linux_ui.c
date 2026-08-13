@@ -151,20 +151,6 @@ void* linux_create_window(int width, int height, const char* title, Uint32 user_
     GtkWidget *file_item = gtk_menu_item_new_with_label("File");
     gtk_menu_item_set_submenu(GTK_MENU_ITEM(file_item), file_menu);
     
-    GtkWidget *attach_item = gtk_menu_item_new_with_label("Attach Tape... (F3)");
-    g_signal_connect(attach_item, "activate", G_CALLBACK(on_attach_tape), NULL);
-    gtk_menu_shell_append(GTK_MENU_SHELL(file_menu), attach_item);
-    
-    GtkWidget *rewind_item = gtk_menu_item_new_with_label("Rewind Tape (F6)");
-    g_signal_connect(rewind_item, "activate", G_CALLBACK(on_rewind_tape), NULL);
-    gtk_menu_shell_append(GTK_MENU_SHELL(file_menu), rewind_item);
-    
-    GtkWidget *spool_item = gtk_menu_item_new_with_label("Spool... (F5)");
-    g_signal_connect(spool_item, "activate", G_CALLBACK(on_spool), NULL);
-    gtk_menu_shell_append(GTK_MENU_SHELL(file_menu), spool_item);
-    
-    gtk_menu_shell_append(GTK_MENU_SHELL(file_menu), gtk_separator_menu_item_new());
-    
     GtkWidget *quit_item = gtk_menu_item_new_with_label("Quit (Ctrl+Q)");
     g_signal_connect(quit_item, "activate", G_CALLBACK(on_quit), NULL);
     gtk_menu_shell_append(GTK_MENU_SHELL(file_menu), quit_item);
@@ -195,13 +181,29 @@ void* linux_create_window(int width, int height, const char* title, Uint32 user_
     g_signal_connect(gfx_item, "activate", G_CALLBACK(on_graphics), NULL);
     gtk_menu_shell_append(GTK_MENU_SHELL(actions_menu), gfx_item);
     
-    GtkWidget *reset_item = gtk_menu_item_new_with_label("Reset (F2)");
-    g_signal_connect(reset_item, "activate", G_CALLBACK(on_reset), NULL);
-    gtk_menu_shell_append(GTK_MENU_SHELL(actions_menu), reset_item);
+    gtk_menu_shell_append(GTK_MENU_SHELL(actions_menu), gtk_separator_menu_item_new());
     
     GtkWidget *break_item = gtk_menu_item_new_with_label("Break (Esc)");
     g_signal_connect(break_item, "activate", G_CALLBACK(on_break), NULL);
     gtk_menu_shell_append(GTK_MENU_SHELL(actions_menu), break_item);
+    
+    GtkWidget *reset_item = gtk_menu_item_new_with_label("Reset (F2)");
+    g_signal_connect(reset_item, "activate", G_CALLBACK(on_reset), NULL);
+    gtk_menu_shell_append(GTK_MENU_SHELL(actions_menu), reset_item);
+    
+    gtk_menu_shell_append(GTK_MENU_SHELL(actions_menu), gtk_separator_menu_item_new());
+    
+    GtkWidget *attach_item = gtk_menu_item_new_with_label("Attach Tape Image... (F3)");
+    g_signal_connect(attach_item, "activate", G_CALLBACK(on_attach_tape), NULL);
+    gtk_menu_shell_append(GTK_MENU_SHELL(actions_menu), attach_item);
+    
+    GtkWidget *rewind_item = gtk_menu_item_new_with_label("Rewind Tape (F6)");
+    g_signal_connect(rewind_item, "activate", G_CALLBACK(on_rewind_tape), NULL);
+    gtk_menu_shell_append(GTK_MENU_SHELL(actions_menu), rewind_item);
+    
+    GtkWidget *spool_item = gtk_menu_item_new_with_label("Spool from File... (F5)");
+    g_signal_connect(spool_item, "activate", G_CALLBACK(on_spool), NULL);
+    gtk_menu_shell_append(GTK_MENU_SHELL(actions_menu), spool_item);
     
     gtk_menu_shell_append(GTK_MENU_SHELL(g_menubar), file_item);
     gtk_menu_shell_append(GTK_MENU_SHELL(g_menubar), edit_item);
