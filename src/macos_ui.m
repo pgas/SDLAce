@@ -76,17 +76,18 @@ push_ace_event(int code, void *data1)
     push_ace_event(ACE_EVENT_BREAK, NULL);
 }
 
+- (void)acCopy:(id)sender
+{
+    (void)sender;
+    push_ace_event(ACE_EVENT_COPY, NULL);
+}
+
 - (void)acPaste:(id)sender
 {
     (void)sender;
     push_ace_event(ACE_EVENT_PASTE, NULL);
 }
 
-- (void)acCopy:(id)sender
-{
-    (void)sender;
-    push_ace_event(ACE_EVENT_COPY, NULL);
-}
 
 /* Shows an NSOpenPanel; posts ACE_EVENT_ATTACH_TAPE with the chosen path. */
 - (void)acAttachTape:(id)sender
@@ -199,7 +200,6 @@ macos_setup_menu(Uint32 user_event_type)
 
         make_item(editMenu, @"Copy from Emulator", @selector(acCopy:),
                   @"c", NSEventModifierFlagCommand, delegate);
-
         make_item(editMenu, @"Paste from Host", @selector(acPaste:),
                   @"v", NSEventModifierFlagCommand, delegate);
 

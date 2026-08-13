@@ -158,161 +158,249 @@ void closedown(void);
 
 /* Custom SDL event type for macOS menu actions (registered at startup) */
 static Uint32 ace_sdl_event_type = (Uint32)-1;
-
-static int selection_active = 0;
-static int sel_start_col = -1;
-static int sel_start_row = -1;
-static int sel_end_col = -1;
-static int sel_end_row = -1;
-static int is_selecting = 0;
-
-static void mouse_to_col_row(int mouse_x, int mouse_y, int *col, int *row) {
-    int win_w, win_h;
-    SDL_GetRendererOutputSize(sdl_renderer, &win_w, &win_h);
-    int log_w, log_h;
-    SDL_GetWindowSize(sdl_window, &log_w, &log_h);
-    float px_ratio = (float)win_w / (float)log_w;
-    
-    int mx = (int)(mouse_x * px_ratio);
-    int my = (int)(mouse_y * px_ratio);
-
-    int bside = (int)(BORDER_SIDE * px_ratio);
-    int btop = (int)(BORDER_TOP * px_ratio);
-
-    int avail_w = win_w - bside * 2;
-    int avail_h = win_h - btop - bside;
-
-    float scale_x = (float)avail_w / hsize;
-    float scale_y = (float)avail_h / vsize;
-    float scale = (scale_x < scale_y) ? scale_x : scale_y;
-
-    int dst_w = (int)(hsize * scale);
-    int dst_h = (int)(vsize * scale);
-    int dst_x = (win_w - dst_w) / 2;
-    int dst_y = btop + (avail_h - dst_h) / 2;
-
-    int margin = (int)(16 * scale / SCALE);
-    if (margin < 8) margin = 8;
-
-    int active_w = dst_w - margin * 2;
-    int active_h = dst_h - margin * 2;
-    int active_x = dst_x + margin;
-    int active_y = dst_y + margin;
-
-    if (mx >= active_x && mx < active_x + active_w && my >= active_y && my < active_y + active_h) {
-        *col = ((mx - active_x) * 32) / active_w;
-        *row = ((my - active_y) * 24) / active_h;
-        if (*col < 0) *col = 0;
-        if (*col > 31) *col = 31;
-        if (*row < 0) *row = 0;
-        if (*row > 23) *row = 23;
-    } else {
-        *col = -1;
-        *row = -1;
-    }
-}
-
-static void ace_char_to_utf8(unsigned char c, char **p) {
-  int inv = (c & 0x80) ? 1 : 0;
-  unsigned char base = c & 0x7f;
-  
-  if (base == 96) {
-    *(*p)++ = (char)0xC2; *(*p)++ = (char)0xA3; /* £ */
-  } else if (base == 127) {
-    *(*p)++ = (char)0xC2; *(*p)++ = (char)0xA9; /* © */
-  } else if (base >= 32 && base < 127) {
-    if (inv && base == 32) {
-      /* Inverse space -> Full block */
-      *(*p)++ = (char)0xE2; *(*p)++ = (char)0x96; *(*p)++ = (char)0x88;
-    } else {
-      *(*p)++ = base;
-    }
-  } else {
-    /* base < 32: Graphics mode characters (17-24 are standard keys 1-8) */
-    const char *blocks[8][2] = {
-      {"\xE2\x96\x96", "\xE2\x96\x9B"}, /* 17: ▖, ▛ */
-      {"\xE2\x96\x97", "\xE2\x96\x9C"}, /* 18: ▗, ▜ */
-      {"\xE2\x96\x98", "\xE2\x96\x99"}, /* 19: ▘, ▙ */
-      {"\xE2\x96\x9D", "\xE2\x96\x9A"}, /* 20: ▝, ▚ */
-      {"\xE2\x96\x84", "\xE2\x96\x80"}, /* 21: ▄, ▀ */
-      {"\xE2\x96\x90", "\xE2\x96\x8C"}, /* 22: ▐, ▌ */
-      {"\xE2\x96\x8C", "\xE2\x96\x90"}, /* 23: ▌, ▐ */
-      {"\xE2\x96\x80", "\xE2\x96\x84"}, /* 24: ▀, ▄ */
-    };
-    if (base >= 17 && base <= 24) {
-      const char *s = blocks[base - 17][inv];
-      while (*s) *(*p)++ = *s++;
-    } else {
-      *(*p)++ = ' '; /* Other control/UDG chars -> space */
-    }
-  }
-}
+static void normal_speed(void);
+static void fast_speed(void);
 
 /* --------------------------------------------------------------------------
- * Copy to clipboard — copies the 32x24 screen to the host clipboard
+ * Mouse selection & Clipboard state
  * -------------------------------------------------------------------------- */
-static void copy_to_clipboard(void) {
-  unsigned char *video_ram = mem + 0x2400;
-  char clipboard_buf[24 * 32 * 3 + 24 + 1]; /* Max 3 bytes per char + \n per line */
-  char *p = clipboard_buf;
-  int x, y;
+static int selecting_text = 0;
+static int sel_start_col = -1, sel_start_row = -1;
+static int sel_end_col = -1, sel_end_row = -1;
 
-  if (video_ram - mem > 0xf000) {
-    video_ram = mem + 0xf000;
+/* Check if character cell at (col, row) is currently selected */
+static int is_cell_selected(int col, int row) {
+  if (sel_start_col < 0 || sel_start_row < 0 || sel_end_col < 0 || sel_end_row < 0)
+    return 0;
+
+  int idx = row * 32 + col;
+  int start_idx = sel_start_row * 32 + sel_start_col;
+  int end_idx = sel_end_row * 32 + sel_end_col;
+
+  if (start_idx > end_idx) {
+    int tmp = start_idx;
+    start_idx = end_idx;
+    end_idx = tmp;
   }
 
-  if (selection_active) {
-    int start_idx = sel_start_row * 32 + sel_start_col;
-    int end_idx = sel_end_row * 32 + sel_end_col;
-    if (start_idx > end_idx) {
-      int tmp = start_idx; start_idx = end_idx; end_idx = tmp;
-    }
-    for (int i = start_idx; i <= end_idx; i++) {
-      int yy = i / 32;
-      int xx = i % 32;
-      unsigned char c = video_ram[yy * 32 + xx];
-      ace_char_to_utf8(c, &p);
-      if (xx == 31 && i != end_idx) {
-        *p++ = '\n';
-      }
-    }
-    *p = '\0';
-    if (p > clipboard_buf) {
-      SDL_SetClipboardText(clipboard_buf);
-    }
-    /* Auto-deselect after copy */
-    selection_active = 0;
+  return (idx >= start_idx && idx <= end_idx);
+}
+
+static void clear_selection(void) {
+  if (sel_start_col >= 0 || sel_start_row >= 0 || sel_end_col >= 0 || sel_end_row >= 0 || selecting_text) {
+    sel_start_col = sel_start_row = sel_end_col = sel_end_row = -1;
+    selecting_text = 0;
     refresh_screen = 1;
+  }
+}
+
+/* Convert mouse window coordinates (win_x, win_y) to Ace text grid (col, row).
+   If clamp_bounds is true, clamps out-of-bounds coordinates to edge cells (0..31, 0..23).
+   Returns 1 if inside display area (or clamped), 0 if strictly outside when clamp_bounds is false. */
+static int get_grid_pos(int win_x, int win_y, int *col, int *row, int clamp_bounds) {
+  int win_w, win_h;
+  SDL_GetRendererOutputSize(sdl_renderer, &win_w, &win_h);
+
+  int log_w, log_h;
+  SDL_GetWindowSize(sdl_window, &log_w, &log_h);
+  float px_ratio = (float)win_w / (float)log_w;
+
+  win_x = (int)(win_x * px_ratio);
+  win_y = (int)(win_y * px_ratio);
+
+  int bside = (int)(BORDER_SIDE * px_ratio);
+  int btop = (int)(BORDER_TOP * px_ratio);
+
+  int avail_w = win_w - bside * 2;
+  int avail_h = win_h - btop - bside;
+
+  float scale_x = (float)avail_w / hsize;
+  float scale_y = (float)avail_h / vsize;
+  float scale = (scale_x < scale_y) ? scale_x : scale_y;
+
+  int dst_w = (int)(hsize * scale);
+  int dst_h = (int)(vsize * scale);
+  int dst_x = (win_w - dst_w) / 2;
+  int dst_y = btop + (avail_h - dst_h) / 2;
+
+  int margin = (int)(16 * scale / SCALE);
+  if (margin < 8) margin = 8;
+
+  int active_w = dst_w - margin * 2;
+  int active_h = dst_h - margin * 2;
+  int active_x = dst_x + margin;
+  int active_y = dst_y + margin;
+
+  if (win_x < active_x || win_x >= active_x + active_w ||
+      win_y < active_y || win_y >= active_y + active_h) {
+    if (!clamp_bounds)
+      return 0; /* Strictly outside active display area */
+  }
+
+  if (win_x < active_x) win_x = active_x;
+  if (win_x >= active_x + active_w) win_x = active_x + active_w - 1;
+  if (win_y < active_y) win_y = active_y;
+  if (win_y >= active_y + active_h) win_y = active_y + active_h - 1;
+
+  float rel_x = (float)(win_x - active_x) / active_w;
+  float rel_y = (float)(win_y - active_y) / active_h;
+
+  int c = (int)(rel_x * 32);
+  int r = (int)(rel_y * 24);
+
+  if (c < 0) c = 0;
+  if (c > 31) c = 31;
+  if (r < 0) r = 0;
+  if (r > 23) r = 23;
+
+  *col = c;
+  *row = r;
+  return 1;
+}
+
+/* Convert Jupiter Ace character byte into standard UTF-8 string.
+   Handles standard ASCII (0x20..0x7E), inverted characters, and 2x2 graphics block characters. */
+static void ace_char_to_utf8(unsigned char c, unsigned char *font_bitmap, char *out_buf, size_t out_buf_size) {
+  int is_inv = (c & 128) ? 1 : 0;
+  unsigned char code = c & 127;
+
+  /* Check for standard printable ASCII range */
+  if (code >= 32 && code <= 126) {
+    out_buf[0] = (char)code;
+    out_buf[1] = '\0';
     return;
   }
 
-  /* Full screen copy */
-  for (y = 0; y < 24; y++) {
-    int last_non_space = -1;
-    unsigned char line_chars[32];
-    for (x = 0; x < 32; x++) {
-      unsigned char c = video_ram[y * 32 + x] & 0x7f;
-      if (c == 0 || c < 32) c = ' ';
-      line_chars[x] = c;
-      if (c != ' ') {
-        last_non_space = x;
+  /* Sample top-left, top-right, bottom-left, bottom-right 4x4 pixel quadrants from character bitmap */
+  int quad_tl = 0, quad_tr = 0, quad_bl = 0, quad_br = 0;
+  if (font_bitmap) {
+    for (int y = 0; y < 4; y++) {
+      if (font_bitmap[y] & 0xF0) quad_tl = 1;
+      if (font_bitmap[y] & 0x0F) quad_tr = 1;
+    }
+    for (int y = 4; y < 8; y++) {
+      if (font_bitmap[y] & 0xF0) quad_bl = 1;
+      if (font_bitmap[y] & 0x0F) quad_br = 1;
+    }
+  }
+
+  if (is_inv) {
+    quad_tl = !quad_tl;
+    quad_tr = !quad_tr;
+    quad_bl = !quad_bl;
+    quad_br = !quad_br;
+  }
+
+  int mask = (quad_tl << 3) | (quad_tr << 2) | (quad_bl << 1) | quad_br;
+
+  /* Map 2x2 quadrant mask to Unicode Block Elements (U+2580..U+259F) */
+  const char *utf8_block = " ";
+  switch (mask) {
+    case 0x0: utf8_block = " "; break;            /* 0000 empty */
+    case 0x1: utf8_block = "\xe2\x96\x97"; break; /* 0001 lower right quadrant (▗) */
+    case 0x2: utf8_block = "\xe2\x96\x96"; break; /* 0010 lower left quadrant (▖) */
+    case 0x3: utf8_block = "\xe2\x96\x84"; break; /* 0011 lower half block (▄) */
+    case 0x4: utf8_block = "\xe2\x96\x9d"; break; /* 0100 upper right quadrant (▝) */
+    case 0x5: utf8_block = "\xe2\x96\x90"; break; /* 0101 right half block (▐) */
+    case 0x6: utf8_block = "\xe2\x96\x9a"; break; /* 0110 upper right & lower left (▚) */
+    case 0x7: utf8_block = "\xe2\x96\x97"; break; /* 0111 lower right, lower left, upper right */
+    case 0x8: utf8_block = "\xe2\x96\x98"; break; /* 1000 upper left quadrant (▘) */
+    case 0x9: utf8_block = "\xe2\x96\x9e"; break; /* 1001 upper left & lower right (▞) */
+    case 0xA: utf8_block = "\xe2\x96\x8c"; break; /* 1010 left half block (▌) */
+    case 0xB: utf8_block = "\xe2\x96\x99"; break; /* 1011 upper left, lower left, lower right */
+    case 0xC: utf8_block = "\xe2\x96\x80"; break; /* 1100 upper half block (▀) */
+    case 0xD: utf8_block = "\xe2\x96\x9c"; break; /* 1101 upper left, upper right, lower right */
+    case 0xE: utf8_block = "\xe2\x96\x9b"; break; /* 1110 upper left, upper right, lower left */
+    case 0xF: utf8_block = "\xe2\x96\x88"; break; /* 1111 full block (█) */
+  }
+
+  snprintf(out_buf, out_buf_size, "%s", utf8_block);
+}
+
+/* Copy current selected text range (or full screen if no selection) to system clipboard */
+static void copy_selection_to_clipboard(void) {
+  int start_col = sel_start_col;
+  int start_row = sel_start_row;
+  int end_col = sel_end_col;
+  int end_row = sel_end_row;
+
+  /* If no active selection range, default to full screen copy */
+  if (start_col < 0 || start_row < 0 || end_col < 0 || end_row < 0) {
+    start_col = 0;
+    start_row = 0;
+    end_col = 31;
+    end_row = 23;
+  }
+
+  int start_idx = start_row * 32 + start_col;
+  int end_idx = end_row * 32 + end_col;
+  if (start_idx > end_idx) {
+    int tmp_r = start_row, tmp_c = start_col;
+    start_row = end_row; start_col = end_col;
+    end_row = tmp_r; end_col = tmp_c;
+  }
+
+  /* Allocate buffer for UTF-8 formatted text */
+  size_t buf_cap = 4096;
+  char *buf = malloc(buf_cap);
+  if (!buf) return;
+  buf[0] = '\0';
+  size_t buf_len = 0;
+
+  unsigned char *video_ram = mem + 0x2400;
+  unsigned char *charset = mem + 0x2c00;
+
+  for (int r = start_row; r <= end_row; r++) {
+    int col_from = (r == start_row) ? start_col : 0;
+    int col_to = (r == end_row) ? end_col : 31;
+
+    char line_buf[256] = "";
+    size_t line_len = 0;
+
+    for (int c = col_from; c <= col_to; c++) {
+      unsigned char ace_c = video_ram[r * 32 + c];
+      unsigned char char_code = ace_c & 127;
+      unsigned char *font_bmp = charset + char_code * 8;
+
+      char utf8_char[16];
+      ace_char_to_utf8(ace_c, font_bmp, utf8_char, sizeof(utf8_char));
+
+      size_t char_len = strlen(utf8_char);
+      if (line_len + char_len < sizeof(line_buf) - 1) {
+        strcpy(line_buf + line_len, utf8_char);
+        line_len += char_len;
       }
     }
-    for (x = 0; x <= last_non_space; x++) {
-      ace_char_to_utf8(line_chars[x], &p);
+
+    /* Trim trailing spaces from line */
+    while (line_len > 0 && line_buf[line_len - 1] == ' ') {
+      line_buf[line_len - 1] = '\0';
+      line_len--;
     }
-    *p++ = '\n';
+
+    if (buf_len + line_len + 2 >= buf_cap) {
+      buf_cap *= 2;
+      char *new_buf = realloc(buf, buf_cap);
+      if (!new_buf) {
+        free(buf);
+        return;
+      }
+      buf = new_buf;
+    }
+
+    if (r > start_row) {
+      buf[buf_len++] = '\n';
+      buf[buf_len] = '\0';
+    }
+
+    strcpy(buf + buf_len, line_buf);
+    buf_len += line_len;
   }
 
-  /* Trim trailing blank lines */
-  while (p > clipboard_buf && *(p - 1) == '\n') {
-    p--;
+  if (buf_len > 0) {
+    SDL_SetClipboardText(buf);
   }
-  *p = '\0';
-
-  if (p > clipboard_buf) {
-    SDL_SetClipboardText(clipboard_buf);
-  }
+  free(buf);
 }
 
 /* --------------------------------------------------------------------------
@@ -355,11 +443,14 @@ static void paste_from_clipboard(void) {
     /* write returns ssize_t, cast to void to ignore the result */
     (void)write(fd, text, strlen(text));
     close(fd);
+    fast_speed(); /* Speed up emulator timing so pasted text streams rapidly */
     spooler_open(tmppath);
     unlink(tmppath); /* safe: spooler holds the fd */
   }
   SDL_free(text);
 }
+
+
 
 /* --------------------------------------------------------------------------
  * Signal / timer helpers
@@ -897,17 +988,6 @@ void startup(void) {
     unsigned char *img_data = stbi_load_from_memory(
         ace_logo_png, (int)ace_logo_png_len, &w, &h, &channels, 4);
     if (img_data) {
-      /* Convert any white/near-white background pixels to transparent alpha so
-       * it blends smoothly */
-      for (int i = 0; i < w * h; i++) {
-        unsigned char r = img_data[i * 4 + 0];
-        unsigned char g = img_data[i * 4 + 1];
-        unsigned char b = img_data[i * 4 + 2];
-        if (r > 240 && g > 240 && b > 240) {
-          img_data[i * 4 + 3] = 0; /* Fully transparent */
-        }
-      }
-
       SDL_Surface *surface = SDL_CreateRGBSurfaceWithFormatFrom(
           img_data, w, h, 32, w * 4, SDL_PIXELFORMAT_RGBA32);
       if (surface) {
@@ -990,7 +1070,7 @@ void check_events(void) {
         paste_from_clipboard();
         break;
       case ACE_EVENT_COPY:
-        copy_to_clipboard();
+        copy_selection_to_clipboard();
         break;
       }
       continue;
@@ -1015,16 +1095,16 @@ void check_events(void) {
       SDL_Keycode ks = ev.key.keysym.sym;
       int mods = (int)ev.key.keysym.mod;
 #ifdef __APPLE__
-      /* On macOS, native menus handle all Cmd shortcuts (Cmd-1..9, Cmd-V, etc).
+      /* On macOS, native menus handle all Cmd shortcuts (Cmd-1..9, Cmd-C, Cmd-V, etc).
          Ignore them here to prevent double actions or sending keys to the
          emulator. */
       if (mods & KMOD_GUI) {
         break;
       }
 #endif
-      /* Ctrl+C (Linux/Windows) — copy from emulator screen */
+      /* Ctrl+C (Linux/Windows) — copy selection to host clipboard */
       if (ks == SDLK_c && (mods & KMOD_CTRL)) {
-        copy_to_clipboard();
+        copy_selection_to_clipboard();
         break;
       }
       /* Ctrl+V (Linux/Windows) — paste from host clipboard */
@@ -1032,6 +1112,7 @@ void check_events(void) {
         paste_from_clipboard();
         break;
       }
+
       if (!spooler_active())
         keyboard_keypress(ks, mods);
       break;
@@ -1051,49 +1132,50 @@ void check_events(void) {
       break;
 
     case SDL_MOUSEBUTTONDOWN:
-      if (ev.button.button == SDL_BUTTON_LEFT) {
-        int col, row;
-        mouse_to_col_row(ev.button.x, ev.button.y, &col, &row);
-        if (col >= 0 && row >= 0) {
-          is_selecting = 1;
-          selection_active = 1;
-          sel_start_col = col;
-          sel_start_row = row;
-          sel_end_col = col;
-          sel_end_row = row;
-          refresh_screen = 1;
-        } else {
-          is_selecting = 0;
-          if (selection_active) {
-            selection_active = 0;
-            refresh_screen = 1;
-          }
-        }
-      }
 #ifndef __APPLE__
       linux_cancel_menu();
 #endif
+      if (ev.button.button == SDL_BUTTON_LEFT) {
+        int c, r;
+        if (get_grid_pos(ev.button.x, ev.button.y, &c, &r, 0)) {
+          /* Record potential selection anchor point, but do NOT set active selection range until mouse moves */
+          selecting_text = 1;
+          sel_start_col = c; sel_start_row = r;
+          sel_end_col = -1;  sel_end_row = -1;
+        } else {
+          /* Clicked outside active screen display -> clear selection */
+          clear_selection();
+        }
+      }
       break;
 
     case SDL_MOUSEMOTION:
-      if (is_selecting) {
-        int col, row;
-        mouse_to_col_row(ev.motion.x, ev.motion.y, &col, &row);
-        if (col >= 0 && row >= 0) {
-          if (sel_end_col != col || sel_end_row != row) {
-             sel_end_col = col;
-             sel_end_row = row;
-             refresh_screen = 1;
+      if (selecting_text && (ev.motion.state & SDL_BUTTON_LMASK)) {
+        int c, r;
+        if (get_grid_pos(ev.motion.x, ev.motion.y, &c, &r, 1)) {
+          /* Update selection target end position */
+          if (c != sel_end_col || r != sel_end_row) {
+            sel_end_col = c;
+            sel_end_row = r;
+            refresh_screen = 1;
           }
         }
       }
       break;
 
     case SDL_MOUSEBUTTONUP:
-      if (ev.button.button == SDL_BUTTON_LEFT) {
-         is_selecting = 0;
+      if (ev.button.button == SDL_BUTTON_LEFT && selecting_text) {
+        /* If mouse was never dragged to another cell, clear selection (single click) */
+        if (sel_end_col < 0 || sel_end_row < 0 ||
+            (sel_start_col == sel_end_col && sel_start_row == sel_end_row)) {
+          clear_selection();
+        } else {
+          selecting_text = 0;
+        }
       }
       break;
+
+
 
     default:
       break;
@@ -1119,6 +1201,10 @@ static void set_image_character(int x, int y, int inv,
   int charbmap_x, charbmap_y;
   unsigned char charbmap_row;
   unsigned char charbmap_row_mask;
+
+  if (is_cell_selected(x, y)) {
+    inv = !inv;
+  }
 
   for (charbmap_y = 0; charbmap_y < 8; charbmap_y++) {
     charbmap_row = charbmap[charbmap_y];
@@ -1222,19 +1308,6 @@ void refresh(void) {
           ymax = y;
         inv = c & 128;
         c &= 127;
-
-        if (selection_active) {
-          int start_idx = sel_start_row * 32 + sel_start_col;
-          int end_idx = sel_end_row * 32 + sel_end_col;
-          if (start_idx > end_idx) {
-            int tmp = start_idx; start_idx = end_idx; end_idx = tmp;
-          }
-          int idx = y * 32 + x;
-          if (idx >= start_idx && idx <= end_idx) {
-            inv = !inv; /* Invert the character if selected */
-          }
-        }
-
         set_image_character(x, y, inv, charset + c * 8);
       }
     }

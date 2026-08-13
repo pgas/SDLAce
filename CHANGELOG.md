@@ -11,10 +11,12 @@ All notable changes to SDLAce are documented here.
 - **Removed `SDL_ttf` dependency**: Replaced font-based bezel text rendering with direct logo image rendering (`images/ace.png`) loaded via `stb_image.h`. Project build dependencies are now strictly **SDL2-only**.
 
 ### Added
+- **Mouse Text Selection & Copying**: Added interactive mouse drag text selection across the $32 \times 24$ emulated screen. Selected text can be copied to the host clipboard using `Cmd+C` / `Ctrl+C` or *Edit → Copy Selection*. Non-standard Jupiter Ace $2 \times 2$ block graphics patterns and inverse characters automatically convert to standard UTF-8 Unicode Block Elements (`U+2580`–`U+259F`).
 - **Internal Speaker sound support**: Emulated the Jupiter Ace CPU-driven buzzer via host-side SDL Audio. Reading or writing to even I/O ports moves the speaker diaphragm. Synthesized and queued square-wave audio at 44100 Hz.
 - **Audio DC Blocker Filter**: Implemented a first-order high-pass filter (decay coefficient `0.995f`, cutoff ~35 Hz) to eliminate clicks and crackles when the speaker is idle or when audio buffer underflows occur.
 
 ### Fixed
+- **Mouse Text Selection & Copy on macOS/Linux**: Fixed mouse click event registration for text selection, selection highlight rendering, and Cocoa/GTK shortcut handling.
 - **Accurate 50 Hz Frame Timing**: Replaced POSIX `pause()` / `setitimer` with a hybrid audio-queue throttle (`SDL_QueueAudio`) and high-resolution performance-counter timer (`SDL_GetPerformanceCounter()`). Guarantees 100% accurate 3.25 MHz / 50 Hz execution speed across macOS and Linux.
 - **Hardware-Accurate 3.25 MHz CPU Clock**: Calibrated frame cycle budget to 65,000 t-states per 50 Hz frame (`CYCLES_PER_FRAME = 65000`), matching real Jupiter Ace hardware timing.
 - **ULA Video RAM Bus Contention**: Added wait-state bus contention delay for accesses to Video/Char RAM (`0x2000–0x27FF`) in `src/z80.h`.
