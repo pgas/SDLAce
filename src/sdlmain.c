@@ -167,7 +167,9 @@ static Uint32 ace_sdl_event_type = (Uint32)-1;
  * -------------------------------------------------------------------------- */
 static void paste_from_clipboard(void) {
   char *text;
-  char tmppath[256];
+  char *p, *q;
+  char tmppath[] = "/tmp/.xace_paste_XXXXXX";
+  int fd;
   FILE *f;
 
   if (spooler_active())
@@ -180,12 +182,29 @@ static void paste_from_clipboard(void) {
     return;
   }
 
-  snprintf(tmppath, sizeof(tmppath), "/tmp/.xace_paste_%d", (int)getpid());
-  f = fopen(tmppath, "w");
-  if (f) {
-    fputs(text, f);
-    fclose(f);
-    spooler_open(tmppath);
+  /* Strip carriage returns (\r) to avoid double-Enters on Windows text */
+  for (p = text, q = text; *p; p++) {
+    if (*p != '\r') {
+      *q++ = *p;
+    }
+  }
+  *q = '\0';
+
+  if (!*text) {
+    SDL_free(text);
+    return;
+  }
+
+  fd = mkstemp(tmppath);
+  if (fd != -1) {
+    f = fdopen(fd, "w");
+    if (f) {
+      fputs(text, f);
+      fclose(f);
+      spooler_open(tmppath);
+    } else {
+      close(fd);
+    }
     unlink(tmppath); /* safe: spooler holds the fd */
   }
   SDL_free(text);
