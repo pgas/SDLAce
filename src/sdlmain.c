@@ -159,6 +159,127 @@ void closedown(void);
 /* Custom SDL event type for macOS menu actions (registered at startup) */
 static Uint32 ace_sdl_event_type = (Uint32)-1;
 
+static int selection_active = 0;
+static int sel_start_col = -1;
+static int sel_start_row = -1;
+static int sel_end_col = -1;
+static int sel_end_row = -1;
+static int is_selecting = 0;
+
+static void mouse_to_col_row(int mouse_x, int mouse_y, int *col, int *row) {
+    int win_w, win_h;
+    SDL_GetRendererOutputSize(sdl_renderer, &win_w, &win_h);
+    int log_w, log_h;
+    SDL_GetWindowSize(sdl_window, &log_w, &log_h);
+    float px_ratio = (float)win_w / (float)log_w;
+    
+    int mx = (int)(mouse_x * px_ratio);
+    int my = (int)(mouse_y * px_ratio);
+
+    int bside = (int)(BORDER_SIDE * px_ratio);
+    int btop = (int)(BORDER_TOP * px_ratio);
+
+    int avail_w = win_w - bside * 2;
+    int avail_h = win_h - btop - bside;
+
+    float scale_x = (float)avail_w / hsize;
+    float scale_y = (float)avail_h / vsize;
+    float scale = (scale_x < scale_y) ? scale_x : scale_y;
+
+    int dst_w = (int)(hsize * scale);
+    int dst_h = (int)(vsize * scale);
+    int dst_x = (win_w - dst_w) / 2;
+    int dst_y = btop + (avail_h - dst_h) / 2;
+
+    int margin = (int)(16 * scale / SCALE);
+    if (margin < 8) margin = 8;
+
+    int active_w = dst_w - margin * 2;
+    int active_h = dst_h - margin * 2;
+    int active_x = dst_x + margin;
+    int active_y = dst_y + margin;
+
+    if (mx >= active_x && mx < active_x + active_w && my >= active_y && my < active_y + active_h) {
+        *col = ((mx - active_x) * 32) / active_w;
+        *row = ((my - active_y) * 24) / active_h;
+        if (*col < 0) *col = 0;
+        if (*col > 31) *col = 31;
+        if (*row < 0) *row = 0;
+        if (*row > 23) *row = 23;
+    } else {
+        *col = -1;
+        *row = -1;
+    }
+}
+
+/* --------------------------------------------------------------------------
+ * Copy to clipboard — copies the 32x24 screen to the host clipboard
+ * -------------------------------------------------------------------------- */
+static void copy_to_clipboard(void) {
+  unsigned char *video_ram = mem + 0x2400;
+  char clipboard_buf[24 * 33 + 1]; /* 32 chars + \n per line */
+  char *p = clipboard_buf;
+  int x, y;
+
+  if (video_ram - mem > 0xf000) {
+    video_ram = mem + 0xf000;
+  }
+
+  if (selection_active) {
+    int start_idx = sel_start_row * 32 + sel_start_col;
+    int end_idx = sel_end_row * 32 + sel_end_col;
+    if (start_idx > end_idx) {
+      int tmp = start_idx; start_idx = end_idx; end_idx = tmp;
+    }
+    for (int i = start_idx; i <= end_idx; i++) {
+      int yy = i / 32;
+      int xx = i % 32;
+      unsigned char c = video_ram[yy * 32 + xx] & 0x7f;
+      if (c == 0) c = ' ';
+      *p++ = c;
+      if (xx == 31 && i != end_idx) {
+        *p++ = '\n';
+      }
+    }
+    *p = '\0';
+    if (p > clipboard_buf) {
+      SDL_SetClipboardText(clipboard_buf);
+    }
+    /* Auto-deselect after copy */
+    selection_active = 0;
+    refresh_screen = 1;
+    return;
+  }
+
+  /* Full screen copy */
+  for (y = 0; y < 24; y++) {
+    int last_non_space = -1;
+    char line_buf[32];
+    for (x = 0; x < 32; x++) {
+      unsigned char c = video_ram[y * 32 + x] & 0x7f;
+      if (c == 0) c = ' ';
+      line_buf[x] = c;
+      if (c != ' ') {
+        last_non_space = x;
+      }
+    }
+    for (x = 0; x <= last_non_space; x++) {
+      *p++ = line_buf[x];
+    }
+    *p++ = '\n';
+  }
+
+  /* Trim trailing blank lines */
+  while (p > clipboard_buf && *(p - 1) == '\n') {
+    p--;
+  }
+  *p = '\0';
+
+  if (p > clipboard_buf) {
+    SDL_SetClipboardText(clipboard_buf);
+  }
+}
+
 /* --------------------------------------------------------------------------
  * Paste from clipboard — writes clipboard text to a temp file, then feeds
  * it through the existing spooler (press/release timing is handled there).
@@ -833,6 +954,9 @@ void check_events(void) {
       case ACE_EVENT_PASTE:
         paste_from_clipboard();
         break;
+      case ACE_EVENT_COPY:
+        copy_to_clipboard();
+        break;
       }
       continue;
     }
@@ -863,6 +987,11 @@ void check_events(void) {
         break;
       }
 #endif
+      /* Ctrl+C (Linux/Windows) — copy from emulator screen */
+      if (ks == SDLK_c && (mods & KMOD_CTRL)) {
+        copy_to_clipboard();
+        break;
+      }
       /* Ctrl+V (Linux/Windows) — paste from host clipboard */
       if (ks == SDLK_v && (mods & KMOD_CTRL)) {
         paste_from_clipboard();
@@ -887,9 +1016,48 @@ void check_events(void) {
       break;
 
     case SDL_MOUSEBUTTONDOWN:
+      if (ev.button.button == SDL_BUTTON_LEFT) {
+        int col, row;
+        mouse_to_col_row(ev.button.x, ev.button.y, &col, &row);
+        if (col >= 0 && row >= 0) {
+          is_selecting = 1;
+          selection_active = 1;
+          sel_start_col = col;
+          sel_start_row = row;
+          sel_end_col = col;
+          sel_end_row = row;
+          refresh_screen = 1;
+        } else {
+          is_selecting = 0;
+          if (selection_active) {
+            selection_active = 0;
+            refresh_screen = 1;
+          }
+        }
+      }
 #ifndef __APPLE__
       linux_cancel_menu();
 #endif
+      break;
+
+    case SDL_MOUSEMOTION:
+      if (is_selecting) {
+        int col, row;
+        mouse_to_col_row(ev.motion.x, ev.motion.y, &col, &row);
+        if (col >= 0 && row >= 0) {
+          if (sel_end_col != col || sel_end_row != row) {
+             sel_end_col = col;
+             sel_end_row = row;
+             refresh_screen = 1;
+          }
+        }
+      }
+      break;
+
+    case SDL_MOUSEBUTTONUP:
+      if (ev.button.button == SDL_BUTTON_LEFT) {
+         is_selecting = 0;
+      }
       break;
 
     default:
@@ -1019,6 +1187,19 @@ void refresh(void) {
           ymax = y;
         inv = c & 128;
         c &= 127;
+
+        if (selection_active) {
+          int start_idx = sel_start_row * 32 + sel_start_col;
+          int end_idx = sel_end_row * 32 + sel_end_col;
+          if (start_idx > end_idx) {
+            int tmp = start_idx; start_idx = end_idx; end_idx = tmp;
+          }
+          int idx = y * 32 + x;
+          if (idx >= start_idx && idx <= end_idx) {
+            inv = !inv; /* Invert the character if selected */
+          }
+        }
+
         set_image_character(x, y, inv, charset + c * 8);
       }
     }

@@ -9,3 +9,4 @@
 #define ACE_EVENT_RESET         6
 #define ACE_EVENT_BREAK         7
 #define ACE_EVENT_PASTE         8
+#define ACE_EVENT_COPY          10

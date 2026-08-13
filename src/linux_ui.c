@@ -23,6 +23,7 @@ push_ace_event(int code, void *data1)
     SDL_PushEvent(&ev);
 }
 
+static void on_copy(GtkWidget *w, gpointer data) { push_ace_event(ACE_EVENT_COPY, NULL); }
 static void on_paste(GtkWidget *w, gpointer data) { push_ace_event(ACE_EVENT_PASTE, NULL); }
 static void on_rewind_tape(GtkWidget *w, gpointer data) { push_ace_event(ACE_EVENT_REWIND_TAPE, NULL); }
 static void on_delete_line(GtkWidget *w, gpointer data) { push_ace_event(ACE_EVENT_DELETE_LINE, NULL); }
@@ -127,6 +128,35 @@ static gboolean on_key_event(GtkWidget *widget, GdkEventKey *event, gpointer use
     return FALSE;
 }
 
+static gboolean on_mouse_event(GtkWidget *widget, GdkEvent *event, gpointer user_data) {
+    SDL_Event ev;
+    SDL_zero(ev);
+    if (event->type == GDK_BUTTON_PRESS) {
+        GdkEventButton *eb = (GdkEventButton *)event;
+        ev.type = SDL_MOUSEBUTTONDOWN;
+        ev.button.button = (eb->button == 1) ? SDL_BUTTON_LEFT : ((eb->button == 3) ? SDL_BUTTON_RIGHT : SDL_BUTTON_MIDDLE);
+        ev.button.state = SDL_PRESSED;
+        ev.button.x = (int)eb->x;
+        ev.button.y = (int)eb->y;
+        SDL_PushEvent(&ev);
+    } else if (event->type == GDK_BUTTON_RELEASE) {
+        GdkEventButton *eb = (GdkEventButton *)event;
+        ev.type = SDL_MOUSEBUTTONUP;
+        ev.button.button = (eb->button == 1) ? SDL_BUTTON_LEFT : ((eb->button == 3) ? SDL_BUTTON_RIGHT : SDL_BUTTON_MIDDLE);
+        ev.button.state = SDL_RELEASED;
+        ev.button.x = (int)eb->x;
+        ev.button.y = (int)eb->y;
+        SDL_PushEvent(&ev);
+    } else if (event->type == GDK_MOTION_NOTIFY) {
+        GdkEventMotion *em = (GdkEventMotion *)event;
+        ev.type = SDL_MOUSEMOTION;
+        ev.motion.x = (int)em->x;
+        ev.motion.y = (int)em->y;
+        SDL_PushEvent(&ev);
+    }
+    return FALSE;
+}
+
 void* linux_create_window(int width, int height, const char* title, Uint32 user_event_type) {
     g_ace_event_type = user_event_type;
 
@@ -159,6 +189,10 @@ void* linux_create_window(int width, int height, const char* title, Uint32 user_
     GtkWidget *edit_menu = gtk_menu_new();
     GtkWidget *edit_item = gtk_menu_item_new_with_label("Edit");
     gtk_menu_item_set_submenu(GTK_MENU_ITEM(edit_item), edit_menu);
+    
+    GtkWidget *copy_item = gtk_menu_item_new_with_label("Copy from Emulator (Ctrl+C)");
+    g_signal_connect(copy_item, "activate", G_CALLBACK(on_copy), NULL);
+    gtk_menu_shell_append(GTK_MENU_SHELL(edit_menu), copy_item);
     
     GtkWidget *paste_item = gtk_menu_item_new_with_label("Paste from Host (Ctrl+V)");
     g_signal_connect(paste_item, "activate", G_CALLBACK(on_paste), NULL);
@@ -214,6 +248,10 @@ void* linux_create_window(int width, int height, const char* title, Uint32 user_
     GtkWidget *draw_area = gtk_drawing_area_new();
     gtk_widget_set_size_request(draw_area, width, height);
     gtk_widget_set_can_focus(draw_area, TRUE);
+    gtk_widget_add_events(draw_area, GDK_BUTTON_PRESS_MASK | GDK_BUTTON_RELEASE_MASK | GDK_POINTER_MOTION_MASK);
+    g_signal_connect(draw_area, "button-press-event", G_CALLBACK(on_mouse_event), NULL);
+    g_signal_connect(draw_area, "button-release-event", G_CALLBACK(on_mouse_event), NULL);
+    g_signal_connect(draw_area, "motion-notify-event", G_CALLBACK(on_mouse_event), NULL);
     gtk_box_pack_start(GTK_BOX(vbox), draw_area, TRUE, TRUE, 0);
 
     gtk_widget_show_all(main_window);
