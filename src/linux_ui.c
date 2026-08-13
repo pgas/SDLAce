@@ -152,6 +152,9 @@ static gboolean on_mouse_event(GtkWidget *widget, GdkEvent *event, gpointer user
         ev.type = SDL_MOUSEMOTION;
         ev.motion.x = (int)em->x;
         ev.motion.y = (int)em->y;
+        if (em->state & GDK_BUTTON1_MASK) ev.motion.state |= SDL_BUTTON_LMASK;
+        if (em->state & GDK_BUTTON2_MASK) ev.motion.state |= SDL_BUTTON_MMASK;
+        if (em->state & GDK_BUTTON3_MASK) ev.motion.state |= SDL_BUTTON_RMASK;
         SDL_PushEvent(&ev);
     }
     return FALSE;
