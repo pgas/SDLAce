@@ -22,6 +22,7 @@
 #include "spooler.h"
 
 static FILE *spooler_file = NULL;
+static int spooler_wait = 0;
 static enum {
   SPOOLER_INACTIVE,
   SPOOLER_READ_CHAR,
@@ -49,6 +50,7 @@ spooler_open(char *filename)
   spooler_file = fopen(filename, "rt");
   if (spooler_file) {
     spooler_state = SPOOLER_READ_CHAR;
+    spooler_wait = 0;
     spooler_observer(SPOOLER_OPENED);
     clear_keyboard();
   } else {
@@ -81,17 +83,34 @@ spooler_read_char(void)
   }
 }
 
+#define SPOOLER_HOLD_FRAMES 3
+#define SPOOLER_RELEASE_FRAMES 2
+
 void
 spooler_read(void)
 {
   switch (spooler_state) {
     case SPOOLER_READ_CHAR:
-      spooler_state = SPOOLER_CLEAR_CHAR;
-      spooler_read_char();
+      if (spooler_wait == 0) {
+        spooler_read_char();
+      }
+      if (spooler_active()) {
+        spooler_wait++;
+        if (spooler_wait >= SPOOLER_HOLD_FRAMES) {
+          spooler_wait = 0;
+          spooler_state = SPOOLER_CLEAR_CHAR;
+        }
+      }
       break;
     case SPOOLER_CLEAR_CHAR:
-      spooler_state = SPOOLER_READ_CHAR;
-      clear_keyboard();
+      if (spooler_wait == 0) {
+        clear_keyboard();
+      }
+      spooler_wait++;
+      if (spooler_wait >= SPOOLER_RELEASE_FRAMES) {
+        spooler_wait = 0;
+        spooler_state = SPOOLER_READ_CHAR;
+      }
       break;
   }
 }
