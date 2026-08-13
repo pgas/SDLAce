@@ -51,7 +51,7 @@ target_compile_definitions(sdlace PRIVATE USE_SDL SDL_MAIN_HANDLED)
 target_include_directories(sdlace PRIVATE
   ${SDL2_INCLUDE_DIR}
 )
-target_link_libraries(sdlace PRIVATE ${SDL2_LIB})
+target_link_libraries(sdlace PRIVATE ${SDL2_LIB} m)
 
 if(NOT APPLE)
   target_link_libraries(sdlace PRIVATE PkgConfig::GTK3)
