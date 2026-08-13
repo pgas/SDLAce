@@ -1,0 +1,75 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 660 250" width="100%" height="100%">
+  <defs>
+    <!-- Drop shadow for Jupiter text -->
+    <filter id="shadow" x="-10%" y="-10%" width="130%" height="130%">
+      <feDropShadow dx="2" dy="3" stdDeviation="2" flood-color="#000000" flood-opacity="0.3"/>
+    </filter>
+  </defs>
+
+  <g transform="translate(10, 10)">
+    <!-- "Jupiter" Text -->
+    <g filter="url(#shadow)">
+      <text x="10" y="90" 
+            font-family="-apple-system, BlinkMacSystemFont, 'Helvetica Neue', Arial, sans-serif" 
+            font-size="82" 
+            font-weight="700" 
+            font-style="italic" 
+            fill="#000000" 
+            letter-spacing="-2">Jupiter</text>
+    </g>
+
+    <!-- "ACE" Text -->
+    <text x="145" y="145" 
+          font-family="-apple-system, BlinkMacSystemFont, 'Helvetica Neue', Arial, sans-serif" 
+          font-size="44" 
+          font-weight="300" 
+          font-style="italic" 
+          fill="#000000" 
+          letter-spacing="1">ACE</text>
+
+    <!-- Brick Red Stripe Pattern (#B22222) -->
+    <g fill="#B22222">
+      <!-- Row 1 (Top Short Bar) -->
+      <polygon points="330,10  380,10  375,14  325,14" />
+
+      <!-- Row 2 -->
+      <polygon points="325,22  375,22  370,26  320,26" />
+
+      <!-- Row 3 -->
+      <polygon points="320,34  370,34  365,38  315,38" />
+
+      <!-- Row 4 -->
+      <polygon points="315,46  365,46  360,50  310,50" />
+
+      <!-- Row 5 -->
+      <polygon points="310,58  360,58  355,62  305,62" />
+
+      <!-- Row 6 (1st Extended Long Bar) -->
+      <polygon points="305,70  640,70  635,74  300,74" />
+
+      <!-- Row 7 (2nd Extended Long Bar) -->
+      <polygon points="300,82  640,82  635,86  295,86" />
+
+      <!-- Row 8 -->
+      <polygon points="295,94  345,94  340,98  290,98" />
+
+      <!-- Row 9 -->
+      <polygon points="290,106 340,106 335,110 285,110" />
+
+      <!-- Row 10 -->
+      <polygon points="285,118 335,118 330,122 280,122" />
+
+      <!-- Row 11 -->
+      <polygon points="280,130 330,130 325,134 275,134" />
+
+      <!-- Row 12 -->
+      <polygon points="275,142 325,142 320,146 270,146" />
+
+      <!-- Row 13 -->
+      <polygon points="270,154 320,154 315,158 265,158" />
+
+      <!-- Row 14 (Bottom Short Bar) -->
+      <polygon points="265,166 315,166 310,170 260,170" />
+    </g>
+  </g>
+</svg>

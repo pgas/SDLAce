@@ -27,3 +27,4 @@ CMakeCache.txt
 # Build directory
 /build/
 /build_*/
+.DS_Store
