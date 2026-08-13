@@ -212,12 +212,48 @@ static void mouse_to_col_row(int mouse_x, int mouse_y, int *col, int *row) {
     }
 }
 
+static void ace_char_to_utf8(unsigned char c, char **p) {
+  int inv = (c & 0x80) ? 1 : 0;
+  unsigned char base = c & 0x7f;
+  
+  if (base == 96) {
+    *(*p)++ = (char)0xC2; *(*p)++ = (char)0xA3; /* £ */
+  } else if (base == 127) {
+    *(*p)++ = (char)0xC2; *(*p)++ = (char)0xA9; /* © */
+  } else if (base >= 32 && base < 127) {
+    if (inv && base == 32) {
+      /* Inverse space -> Full block */
+      *(*p)++ = (char)0xE2; *(*p)++ = (char)0x96; *(*p)++ = (char)0x88;
+    } else {
+      *(*p)++ = base;
+    }
+  } else {
+    /* base < 32: Graphics mode characters (17-24 are standard keys 1-8) */
+    const char *blocks[8][2] = {
+      {"\xE2\x96\x96", "\xE2\x96\x9B"}, /* 17: ▖, ▛ */
+      {"\xE2\x96\x97", "\xE2\x96\x9C"}, /* 18: ▗, ▜ */
+      {"\xE2\x96\x98", "\xE2\x96\x99"}, /* 19: ▘, ▙ */
+      {"\xE2\x96\x9D", "\xE2\x96\x9A"}, /* 20: ▝, ▚ */
+      {"\xE2\x96\x84", "\xE2\x96\x80"}, /* 21: ▄, ▀ */
+      {"\xE2\x96\x90", "\xE2\x96\x8C"}, /* 22: ▐, ▌ */
+      {"\xE2\x96\x8C", "\xE2\x96\x90"}, /* 23: ▌, ▐ */
+      {"\xE2\x96\x80", "\xE2\x96\x84"}, /* 24: ▀, ▄ */
+    };
+    if (base >= 17 && base <= 24) {
+      const char *s = blocks[base - 17][inv];
+      while (*s) *(*p)++ = *s++;
+    } else {
+      *(*p)++ = ' '; /* Other control/UDG chars -> space */
+    }
+  }
+}
+
 /* --------------------------------------------------------------------------
  * Copy to clipboard — copies the 32x24 screen to the host clipboard
  * -------------------------------------------------------------------------- */
 static void copy_to_clipboard(void) {
   unsigned char *video_ram = mem + 0x2400;
-  char clipboard_buf[24 * 33 + 1]; /* 32 chars + \n per line */
+  char clipboard_buf[24 * 32 * 3 + 24 + 1]; /* Max 3 bytes per char + \n per line */
   char *p = clipboard_buf;
   int x, y;
 
@@ -234,9 +270,8 @@ static void copy_to_clipboard(void) {
     for (int i = start_idx; i <= end_idx; i++) {
       int yy = i / 32;
       int xx = i % 32;
-      unsigned char c = video_ram[yy * 32 + xx] & 0x7f;
-      if (c == 0) c = ' ';
-      *p++ = c;
+      unsigned char c = video_ram[yy * 32 + xx];
+      ace_char_to_utf8(c, &p);
       if (xx == 31 && i != end_idx) {
         *p++ = '\n';
       }
@@ -254,17 +289,17 @@ static void copy_to_clipboard(void) {
   /* Full screen copy */
   for (y = 0; y < 24; y++) {
     int last_non_space = -1;
-    char line_buf[32];
+    unsigned char line_chars[32];
     for (x = 0; x < 32; x++) {
       unsigned char c = video_ram[y * 32 + x] & 0x7f;
-      if (c == 0) c = ' ';
-      line_buf[x] = c;
+      if (c == 0 || c < 32) c = ' ';
+      line_chars[x] = c;
       if (c != ' ') {
         last_non_space = x;
       }
     }
     for (x = 0; x <= last_non_space; x++) {
-      *p++ = line_buf[x];
+      ace_char_to_utf8(line_chars[x], &p);
     }
     *p++ = '\n';
   }
