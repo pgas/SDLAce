@@ -172,18 +172,14 @@ static void paste_from_clipboard(void) {
   int fd;
 
   if (spooler_active()) {
-    printf("PASTE: Spooler already active.\n");
     return;
   }
 
   text = SDL_GetClipboardText();
   if (!text || !*text) {
-    printf("PASTE: Clipboard is empty or failed to read.\n");
     if (text) SDL_free(text);
     return;
   }
-
-  printf("PASTE: Got text from SDL clipboard: '%s'\n", text);
 
   /* Strip carriage returns (\r) to avoid double-Enters on Windows text */
   for (p = text, q = text; *p; p++) {
@@ -200,14 +196,11 @@ static void paste_from_clipboard(void) {
 
   fd = mkstemp(tmppath);
   if (fd != -1) {
-    if (write(fd, text, strlen(text)) != (ssize_t)strlen(text)) {
-      printf("PASTE: Failed to write to %s\n", tmppath);
-    }
+    /* write returns ssize_t, cast to void to ignore the result */
+    (void)write(fd, text, strlen(text));
     close(fd);
     spooler_open(tmppath);
     unlink(tmppath); /* safe: spooler holds the fd */
-  } else {
-    printf("PASTE: mkstemp failed for %s\n", tmppath);
   }
   SDL_free(text);
 }
