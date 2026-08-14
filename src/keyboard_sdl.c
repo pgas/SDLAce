@@ -153,7 +153,39 @@ static const int shifted_symbol_response[] = {
   SDLK_PERIOD,       2, 0xef, 0, 0xfd,   /* Shift+. = > */
   SDLK_SLASH,        0, 0xef, 0, 0xfd,   /* Shift+/ = ? */
   SDLK_BACKQUOTE,    1, 0xfe, 0, 0xfd,   /* Shift+` = ~ (same as bare `) */
+  /* Shifted digits mapping for standard US/UK Mac layout */
+  SDLK_1,            3, 0xfe, 0, 0xfd,   /* Shift+1 = !  (ACE Sym+1) */
+  SDLK_2,            3, 0xfd, 0, 0xfd,   /* Shift+2 = @  (ACE Sym+2) */
+  SDLK_3,            0, 0xf7, 0, 0xfd,   /* Shift+3 = £  (ACE Sym+X) */
+  SDLK_4,            3, 0xf7, 0, 0xfd,   /* Shift+4 = $  (ACE Sym+4) */
+  SDLK_5,            3, 0xef, 0, 0xfd,   /* Shift+5 = %  (ACE Sym+5) */
+  SDLK_6,            6, 0xef, 0, 0xfd,   /* Shift+6 = ^  (ACE Sym+H) */
+  SDLK_7,            4, 0xef, 0, 0xfd,   /* Shift+7 = &  (ACE Sym+6) */
+  SDLK_8,            7, 0xf7, 0, 0xfd,   /* Shift+8 = *  (ACE Sym+B) */
+  SDLK_9,            4, 0xfb, 0, 0xfd,   /* Shift+9 = (  (ACE Sym+8) */
+  SDLK_0,            4, 0xfd, 0, 0xfd,   /* Shift+0 = )  (ACE Sym+9) */
+  SDLK_BACKSLASH,    1, 0xfd, 0, 0xfd,   /* Shift+\ = |  (ACE Sym+S) */
 };
+
+static int graphics_mode_active = 0;
+
+void
+keyboard_set_graphics_mode(int active)
+{
+  graphics_mode_active = active;
+}
+
+int
+keyboard_get_graphics_mode(void)
+{
+  return graphics_mode_active;
+}
+
+void
+keyboard_toggle_graphics_mode(void)
+{
+  graphics_mode_active = !graphics_mode_active;
+}
 
 void
 keyboard_init(NonAceKeyHandler non_ace_key_handler)
@@ -287,10 +319,19 @@ keyboard_keypress(AceKeySym ks, int key_state)
         keyboard_process_keypress_keyports(ks);
         keyboard_ports[ACE_SHIFT_PORT] &= ACE_SHIFT_MASK;
       } else if (is_digit_key(ks)) {
-        /* Shift+digit → base digit key + ACE Symbol Shift
-         * (SDL2 on macOS never generates SDLK_EXCLAIM etc.) */
-        keyboard_process_keypress_keyports(ks);
-        keyboard_ports[ACE_SYM_PORT] &= ACE_SYM_MASK;
+        if (graphics_mode_active) {
+          keyboard_process_keypress_keyports(ks);
+          keyboard_ports[ACE_SYM_PORT] &= ACE_SYM_MASK;
+        } else {
+          int kp1, kp1v, kp2, kp2v;
+          if (keyboard_get_shifted_symbol(ks, &kp1, &kp1v, &kp2, &kp2v)) {
+            keyboard_ports[kp1] &= kp1v;
+            keyboard_ports[kp2] &= kp2v;
+          } else {
+            keyboard_process_keypress_keyports(ks);
+            keyboard_ports[ACE_SYM_PORT] &= ACE_SYM_MASK;
+          }
+        }
       } else {
         int kp1, kp1v, kp2, kp2v;
         if (keyboard_get_shifted_symbol(ks, &kp1, &kp1v, &kp2, &kp2v)) {
@@ -325,8 +366,19 @@ keyboard_keyrelease(AceKeySym ks, int key_state)
         keyboard_process_keyrelease_keyports(ks);
         keyboard_ports[ACE_SHIFT_PORT] |= ~ACE_SHIFT_MASK;
       } else if (is_digit_key(ks)) {
-        keyboard_process_keyrelease_keyports(ks);
-        keyboard_ports[ACE_SYM_PORT] |= ~ACE_SYM_MASK;
+        if (graphics_mode_active) {
+          keyboard_process_keyrelease_keyports(ks);
+          keyboard_ports[ACE_SYM_PORT] |= ~ACE_SYM_MASK;
+        } else {
+          int kp1, kp1v, kp2, kp2v;
+          if (keyboard_get_shifted_symbol(ks, &kp1, &kp1v, &kp2, &kp2v)) {
+            keyboard_ports[kp1] |= ~kp1v;
+            keyboard_ports[kp2] |= ~kp2v;
+          } else {
+            keyboard_process_keyrelease_keyports(ks);
+            keyboard_ports[ACE_SYM_PORT] |= ~ACE_SYM_MASK;
+          }
+        }
       } else {
         int kp1, kp1v, kp2, kp2v;
         if (keyboard_get_shifted_symbol(ks, &kp1, &kp1v, &kp2, &kp2v)) {

@@ -25,4 +25,8 @@ extern void keyboard_clear(void);
 extern void keyboard_keypress(AceKeySym ks, int key_state);
 extern void keyboard_keyrelease(AceKeySym ks, int key_state);
 
+extern void keyboard_set_graphics_mode(int active);
+extern int keyboard_get_graphics_mode(void);
+extern void keyboard_toggle_graphics_mode(void);
+
 #endif

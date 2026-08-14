@@ -252,6 +252,33 @@ test_keyboard_keyrelease_ignore_keyports_for_keys_pressed_with_control_key()
   check_keyports(expected_keyports);
 }
 
+static void
+test_keyboard_shift_digit_and_graphics_mode()
+{
+  /* Shift+8 (SDLK_8 + KMOD_SHIFT) maps to Symbol Shift (Port 0, 0xfd) + B (Port 7, 0xf7) in normal mode */
+  unsigned char expected_star_keyports[8] = {
+    0xfd, 0xff, 0xff, 0xff,
+    0xff, 0xff, 0xff, 0xf7
+  };
+
+  keyboard_init(non_ace_key_handler);
+  keyboard_set_graphics_mode(0);
+  keyboard_keypress(SDLK_8, KMOD_SHIFT);
+  check_keyports(expected_star_keyports);
+  keyboard_keyrelease(SDLK_8, KMOD_SHIFT);
+
+  /* In Graphics Mode, Shift+8 maps to Symbol Shift (Port 0, 0xfd) + 8 (Port 4, 0xfb) */
+  keyboard_clear();
+  keyboard_set_graphics_mode(1);
+  keyboard_keypress(SDLK_8, KMOD_SHIFT);
+  unsigned char expected_graphics_keyports[8] = {
+    0xfd, 0xff, 0xff, 0xff,
+    0xfb, 0xff, 0xff, 0xff
+  };
+  check_keyports(expected_graphics_keyports);
+  keyboard_set_graphics_mode(0);
+}
+
 int main()
 {
   test_keyboard_clear();
@@ -264,5 +291,6 @@ int main()
   test_keyboard_keyrelease_from_single_key();
   test_keyboard_keyrelease_from_single_key_with_multiple_pressed();
   test_keyboard_keyrelease_ignore_keyports_for_keys_pressed_with_control_key();
+  test_keyboard_shift_digit_and_graphics_mode();
   exit(0);
 }

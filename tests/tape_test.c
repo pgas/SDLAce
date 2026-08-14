@@ -212,7 +212,7 @@ test_tape_load_p_first_dict_on_tape()
 
   tape_attach(filename);
   mem[9985] = 0;
-  strncpy(mem+9986, filename_on_tape, 10);
+  strncpy((char *)mem+9986, filename_on_tape, 10);
 
   observer_status_init();
   tape_add_observer(observer);
