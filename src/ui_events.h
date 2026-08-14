@@ -10,3 +10,4 @@
 #define ACE_EVENT_BREAK         7
 #define ACE_EVENT_PASTE         8
 #define ACE_EVENT_COPY          10
+#define ACE_EVENT_JUPITER_LAYOUT 11

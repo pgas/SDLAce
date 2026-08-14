@@ -29,6 +29,7 @@ static void on_rewind_tape(GtkWidget *w, gpointer data) { push_ace_event(ACE_EVE
 static void on_delete_line(GtkWidget *w, gpointer data) { push_ace_event(ACE_EVENT_DELETE_LINE, NULL); }
 static void on_inverse_video(GtkWidget *w, gpointer data) { push_ace_event(ACE_EVENT_INVERSE_VIDEO, NULL); }
 static void on_graphics(GtkWidget *w, gpointer data) { push_ace_event(ACE_EVENT_GRAPHICS, NULL); }
+static void on_jupiter_layout(GtkWidget *w, gpointer data) { push_ace_event(ACE_EVENT_JUPITER_LAYOUT, NULL); }
 static void on_reset(GtkWidget *w, gpointer data) { push_ace_event(ACE_EVENT_RESET, NULL); }
 static void on_break(GtkWidget *w, gpointer data) { push_ace_event(ACE_EVENT_BREAK, NULL); }
 
@@ -107,6 +108,7 @@ static gboolean on_key_event(GtkWidget *widget, GdkEventKey *event, gpointer use
             case GDK_KEY_F3: sym = SDLK_F3; break;
             case GDK_KEY_F4: sym = SDLK_F4; break;
             case GDK_KEY_F5: sym = SDLK_F5; break;
+            case GDK_KEY_F8: sym = SDLK_F8; break;
             case GDK_KEY_F9: sym = SDLK_F9; break;
             case GDK_KEY_Shift_L:
             case GDK_KEY_Shift_R: sym = SDLK_LSHIFT; break;
@@ -217,6 +219,10 @@ void* linux_create_window(int width, int height, const char* title, Uint32 user_
     GtkWidget *gfx_item = gtk_menu_item_new_with_label("Graphics (F9)");
     g_signal_connect(gfx_item, "activate", G_CALLBACK(on_graphics), NULL);
     gtk_menu_shell_append(GTK_MENU_SHELL(actions_menu), gfx_item);
+    
+    GtkWidget *jupiter_item = gtk_menu_item_new_with_label("Toggle Jupiter Layout (F8)");
+    g_signal_connect(jupiter_item, "activate", G_CALLBACK(on_jupiter_layout), NULL);
+    gtk_menu_shell_append(GTK_MENU_SHELL(actions_menu), jupiter_item);
     
     gtk_menu_shell_append(GTK_MENU_SHELL(actions_menu), gtk_separator_menu_item_new());
     

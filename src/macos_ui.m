@@ -64,6 +64,12 @@ push_ace_event(int code, void *data1)
     push_ace_event(ACE_EVENT_GRAPHICS, NULL);
 }
 
+- (void)acJupiterLayout:(id)sender
+{
+    (void)sender;
+    push_ace_event(ACE_EVENT_JUPITER_LAYOUT, NULL);
+}
+
 - (void)acReset:(id)sender
 {
     (void)sender;
@@ -227,6 +233,11 @@ macos_setup_menu(Uint32 user_event_type)
         make_item(actMenu,
                   @"Inverse Video",
                   @selector(acInverseVideo:), @"4", NSEventModifierFlagCommand, delegate);
+
+        /* Jupiter Layout – Cmd-8 */
+        make_item(actMenu,
+                  @"Toggle Jupiter Layout",
+                  @selector(acJupiterLayout:), @"8", NSEventModifierFlagCommand, delegate);
 
         /* Graphics – Cmd-9 */
         make_item(actMenu,

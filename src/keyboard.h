@@ -29,4 +29,8 @@ extern void keyboard_set_graphics_mode(int active);
 extern int keyboard_get_graphics_mode(void);
 extern void keyboard_toggle_graphics_mode(void);
 
+extern void keyboard_set_jupiter_layout(int active);
+extern int keyboard_get_jupiter_layout(void);
+extern void keyboard_toggle_jupiter_layout(void);
+
 #endif

@@ -279,6 +279,24 @@ test_keyboard_shift_digit_and_graphics_mode()
   keyboard_set_graphics_mode(0);
 }
 
+static void
+test_keyboard_jupiter_layout()
+{
+  /* In Jupiter Layout mode, Alt (KMOD_ALT) acts as Symbol Shift (Port 0, 0xfd) 
+     and the raw base key is used, bypassing translation arrays. */
+  unsigned char expected_sym_plus_1_keyports[8] = {
+    0xfd, 0xff, 0xff, 0xfe, /* Port 0 has Symbol Shift, Port 3 has '1' (0xfe) */
+    0xff, 0xff, 0xff, 0xff
+  };
+
+  keyboard_init(non_ace_key_handler);
+  keyboard_set_jupiter_layout(1);
+  keyboard_keypress(SDLK_1, KMOD_ALT);
+  check_keyports(expected_sym_plus_1_keyports);
+  keyboard_keyrelease(SDLK_1, KMOD_ALT);
+  keyboard_set_jupiter_layout(0);
+}
+
 int main()
 {
   test_keyboard_clear();
@@ -292,5 +310,6 @@ int main()
   test_keyboard_keyrelease_from_single_key_with_multiple_pressed();
   test_keyboard_keyrelease_ignore_keyports_for_keys_pressed_with_control_key();
   test_keyboard_shift_digit_and_graphics_mode();
+  test_keyboard_jupiter_layout();
   exit(0);
 }

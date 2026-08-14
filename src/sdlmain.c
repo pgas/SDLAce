@@ -1044,6 +1044,9 @@ void check_events(void) {
         pending_release_key = SDLK_F4;
         pending_release_timer = 10;
         break;
+      case ACE_EVENT_JUPITER_LAYOUT:
+        keyboard_toggle_jupiter_layout();
+        break;
       case ACE_EVENT_GRAPHICS:
         keyboard_keypress(SDLK_F9, 0);
         pending_release_key = SDLK_F9;
@@ -1094,6 +1097,11 @@ void check_events(void) {
     case SDL_KEYDOWN: {
       SDL_Keycode ks = ev.key.keysym.sym;
       int mods = (int)ev.key.keysym.mod;
+
+      if (keyboard_get_jupiter_layout()) {
+        ks = SDL_GetKeyFromScancode(ev.key.keysym.scancode);
+      }
+
 #ifdef __APPLE__
       /* On macOS, native menus handle all Cmd shortcuts (Cmd-1..9, Cmd-C, Cmd-V, etc).
          Ignore them here to prevent double actions or sending keys to the
@@ -1113,6 +1121,14 @@ void check_events(void) {
         break;
       }
 
+      if (ks == SDLK_F8) {
+        keyboard_toggle_jupiter_layout();
+        break;
+      }
+      if (ks == SDLK_F9) {
+        keyboard_toggle_graphics_mode();
+      }
+
       if (!spooler_active())
         keyboard_keypress(ks, mods);
       break;
@@ -1122,11 +1138,19 @@ void check_events(void) {
       if (!spooler_active()) {
         SDL_Keycode ks = ev.key.keysym.sym;
         int mods = (int)ev.key.keysym.mod;
+
+        if (keyboard_get_jupiter_layout()) {
+          ks = SDL_GetKeyFromScancode(ev.key.keysym.scancode);
+        }
+
 #ifdef __APPLE__
         if (mods & KMOD_GUI) {
           break;
         }
 #endif
+        if (ks == SDLK_F8) {
+          break;
+        }
         keyboard_keyrelease(ks, mods);
       }
       break;

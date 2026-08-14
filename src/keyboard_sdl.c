@@ -168,6 +168,7 @@ static const int shifted_symbol_response[] = {
 };
 
 static int graphics_mode_active = 0;
+static int jupiter_layout_active = 0;
 
 void
 keyboard_set_graphics_mode(int active)
@@ -185,6 +186,24 @@ void
 keyboard_toggle_graphics_mode(void)
 {
   graphics_mode_active = !graphics_mode_active;
+}
+
+void
+keyboard_set_jupiter_layout(int active)
+{
+  jupiter_layout_active = active;
+}
+
+int
+keyboard_get_jupiter_layout(void)
+{
+  return jupiter_layout_active;
+}
+
+void
+keyboard_toggle_jupiter_layout(void)
+{
+  jupiter_layout_active = !jupiter_layout_active;
 }
 
 void
@@ -305,6 +324,18 @@ keyboard_get_shifted_symbol(AceKeySym ks,
 void
 keyboard_keypress(AceKeySym ks, int key_state)
 {
+  if (jupiter_layout_active) {
+    keyboard_process_keypress_keyports(ks);
+    if (key_state & (KMOD_SHIFT | KMOD_CAPS)) {
+      keyboard_ports[ACE_SHIFT_PORT] &= ACE_SHIFT_MASK;
+    }
+    if (key_state & KMOD_ALT) {
+      keyboard_ports[ACE_SYM_PORT] &= ACE_SYM_MASK;
+    }
+    keyboard_non_ace_key_handler(ks, key_state);
+    return;
+  }
+
   if (ks >= 'A' && ks <= 'Z') {
     ks = ks - 'A' + 'a';
     key_state |= KMOD_SHIFT;
@@ -353,6 +384,17 @@ keyboard_keypress(AceKeySym ks, int key_state)
 void
 keyboard_keyrelease(AceKeySym ks, int key_state)
 {
+  if (jupiter_layout_active) {
+    keyboard_process_keyrelease_keyports(ks);
+    if (key_state & (KMOD_SHIFT | KMOD_CAPS)) {
+      keyboard_ports[ACE_SHIFT_PORT] |= ~ACE_SHIFT_MASK;
+    }
+    if (key_state & KMOD_ALT) {
+      keyboard_ports[ACE_SYM_PORT] |= ~ACE_SYM_MASK;
+    }
+    return;
+  }
+
   if (ks >= 'A' && ks <= 'Z') {
     ks = ks - 'A' + 'a';
     key_state |= KMOD_SHIFT;
