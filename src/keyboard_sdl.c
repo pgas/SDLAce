@@ -332,7 +332,9 @@ keyboard_keypress(AceKeySym ks, int key_state)
     if (key_state & KMOD_ALT) {
       keyboard_ports[ACE_SYM_PORT] &= ACE_SYM_MASK;
     }
-    keyboard_non_ace_key_handler(ks, key_state);
+    if (keyboard_non_ace_key_handler) {
+      keyboard_non_ace_key_handler(ks, key_state);
+    }
     return;
   }
 
@@ -378,7 +380,9 @@ keyboard_keypress(AceKeySym ks, int key_state)
       keyboard_process_keypress_keyports(ks);
     }
   }
-  keyboard_non_ace_key_handler(ks, key_state);
+  if (keyboard_non_ace_key_handler) {
+    keyboard_non_ace_key_handler(ks, key_state);
+  }
 }
 
 void

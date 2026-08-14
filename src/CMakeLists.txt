@@ -29,7 +29,8 @@ endif()
 
 if(APPLE)
   add_executable(sdlace MACOSX_BUNDLE
-    sdlmain.c
+    main.c
+    sdl_ui.c
     z80.c
     tape.c
     keyboard_sdl.c
@@ -38,7 +39,8 @@ if(APPLE)
   )
 else()
   add_executable(sdlace
-    sdlmain.c
+    main.c
+    sdl_ui.c
     z80.c
     tape.c
     keyboard_sdl.c
