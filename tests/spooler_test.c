@@ -84,7 +84,7 @@ test_spooler_open_successful()
 static void
 test_spooler_open_unsuccessful()
 {
-  char *filename = tmpnam(NULL);
+  char *filename = "non_existent_file_12345.txt";
 
   observer_status_init();
   spooler_init(spooler_observer, NULL, NULL);

@@ -21,6 +21,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 
 #include "tape.h"
 
@@ -151,7 +152,9 @@ test_tape_attach_file_exists()
 static void
 test_tape_attach_file_doesnt_exist()
 {
-  char *filename = tmpnam(NULL);  
+  char filename[] = "/tmp/tape_test_XXXXXX";  
+  close(mkstemp(filename));
+  unlink(filename);
   FILE *fp = tape_attach(filename);
 
   assert(fp != NULL);
@@ -217,7 +220,7 @@ test_tape_load_p_first_dict_on_tape()
   observer_status_init();
   tape_add_observer(observer);
 
-  tape_load_p(mem, 10, 10, 0);
+  tape_load_p((char *)mem, 10, 10, 0);
   /* Check correct name is in memory */
   assert(memcmp(mem+10+1, mem+9986, 10) == 0);
 
@@ -228,7 +231,7 @@ test_tape_load_p_first_dict_on_tape()
   assert(observer_status.message_type == TAPE_MESSAGE);
   assert(strcmp(observer_status.message, "Found file: test") == 0);
 
-  tape_load_p(mem, 10000, 10000, 0);
+  tape_load_p((char *)mem, 10000, 10000, 0);
   /* Check data block is loaded */
   assert(mem[10000] == 0x54);
   assert(mem[10001] == 0x45);
@@ -260,10 +263,10 @@ test_tape_load_p_second_dict_on_tape()
   tape_add_observer(observer);
 
   mem[9985] = 0;
-  strncpy(mem+9986, filename_on_tape, 10);
+  strncpy((char *)mem+9986, filename_on_tape, 10);
 
   /* Skip first dictionary */
-  tape_load_p(mem, 10, 10, 0);
+  tape_load_p((char *)mem, 10, 10, 0);
 
   assert(observer_status.observer_called == 1);
   assert(observer_status.tape_attached == 1);
@@ -273,7 +276,7 @@ test_tape_load_p_second_dict_on_tape()
   assert(strcmp(observer_status.message, "Skipping file: test") == 0);
 
   /* Load the header block */
-  tape_load_p(mem, 10, 10, 0);
+  tape_load_p((char *)mem, 10, 10, 0);
   /* Check correct name is in memory */
   assert(memcmp(mem+10+1, mem+9986, 10) == 0);
 
@@ -285,7 +288,7 @@ test_tape_load_p_second_dict_on_tape()
   assert(strcmp(observer_status.message, "Found file: test2") == 0);
 
   /* Load the data block */
-  tape_load_p(mem, 10000, 10000, 0);
+  tape_load_p((char *)mem, 10000, 10000, 0);
   /* Check data block is loaded */
   assert(mem[10000] == 0x54);
   assert(mem[10001] == 0x45);
@@ -307,13 +310,14 @@ test_tape_load_p_second_dict_on_tape()
 static void
 test_tape_save_p()
 {
-  char *filename = tmpnam(NULL);  
+  char filename[] = "/tmp/tape_test_XXXXXX";  
+  close(mkstemp(filename));
   FILE *fp;
   unsigned char mem[65536];
 
   /* Create header and data block */
-  generate_block(mem, 25, 'A');
-  generate_block(mem+50, 300, 6);
+  generate_block((char *)mem, 25, 'A');
+  generate_block((char *)mem+50, 300, 6);
  
   tape_attach(filename);
 
@@ -321,7 +325,7 @@ test_tape_save_p()
   observer_status_init();
   tape_add_observer(observer);
 
-  tape_save_p(mem, 25);
+  tape_save_p((char *)mem, 25);
   assert(observer_status.observer_called == 1);
   assert(observer_status.tape_attached == 1);
   assert(observer_status.tape_pos == 28);
@@ -329,7 +333,7 @@ test_tape_save_p()
   assert(observer_status.message_type == TAPE_MESSAGE);
   assert(strcmp(observer_status.message, "Saving to file: BCDEFGHIJK") == 0);
 
-  tape_save_p(mem+50, 300);
+  tape_save_p((char *)mem+50, 300);
   assert(observer_status.observer_called == 1);
   assert(observer_status.tape_attached == 1);
   assert(observer_status.tape_pos == 331);
@@ -354,7 +358,8 @@ test_tape_save_p()
 static void
 test_tape_save_p_truncate()
 {
-  char *filename = tmpnam(NULL);  
+  char filename[] = "/tmp/tape_test_XXXXXX";  
+  close(mkstemp(filename));
   FILE *fp;
   unsigned char mem[65536];
   int i;
@@ -362,10 +367,10 @@ test_tape_save_p_truncate()
   /* Save 3 lots of header and data blocks */
   tape_attach(filename);
   for (i = 0; i < 3; i++) {
-    generate_block(mem+(100*i), 25+i, 'A'+i);
-    generate_block(mem+(100*i)+50, 30+i, 6+i);
-    tape_save_p(mem+(100*i), 25+i);
-    tape_save_p(mem+(100*i)+50, 30+i);
+    generate_block((char *)mem+(100*i), 25+i, 'A'+i);
+    generate_block((char *)mem+(100*i)+50, 30+i, 6+i);
+    tape_save_p((char *)mem+(100*i), 25+i);
+    tape_save_p((char *)mem+(100*i)+50, 30+i);
   }
   tape_detach();
 
@@ -375,14 +380,14 @@ test_tape_save_p_truncate()
   for(i = 0; i < 10; i++) {
     mem[9986+i] = mem[100+i];
   }
-  tape_load_p(mem, 1000, 1000, 0);
-  tape_load_p(mem, 1150, 1150, 0);
+  tape_load_p((char *)mem, 1000, 1000, 0);
+  tape_load_p((char *)mem, 1150, 1150, 0);
 
   /* Save 1 set of header and data blocks after the first 2 blocks */
-  generate_block(mem+2000, 28, 'N');
-  generate_block(mem+2050, 40, 20);
-  tape_save_p(mem+2000, 28);
-  tape_save_p(mem+2050, 20);
+  generate_block((char *)mem+2000, 28, 'N');
+  generate_block((char *)mem+2050, 40, 20);
+  tape_save_p((char *)mem+2000, 28);
+  tape_save_p((char *)mem+2050, 20);
   tape_detach();
 
   /* Check that tape only contains first header and data blocks followed by

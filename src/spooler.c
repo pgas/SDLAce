@@ -90,6 +90,8 @@ void
 spooler_read(void)
 {
   switch (spooler_state) {
+    case SPOOLER_INACTIVE:
+      break;
     case SPOOLER_READ_CHAR:
       if (spooler_wait == 0) {
         spooler_read_char();

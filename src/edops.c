@@ -508,7 +508,7 @@ endinstr;
 
 /* save/load patches */
 instr(0xfc,4);
-  if (tape_load_p(mem, hl, de, c)) {
+  if (tape_load_p((char *)mem, hl, de, c)) {
     unsigned int new_hl = (hl + de) & 0xffff;
     f=(f&0xc4)|1|(a&0x28);  /* set carry */
     h = new_hl >> 8;
@@ -521,7 +521,7 @@ instr(0xfc,4);
 endinstr;
 
 instr(0xfd,4);
-  tape_save_p(mem+hl, de);
+  tape_save_p((char *)mem+hl, de);
 endinstr;
 
 default: tstates+=4;
