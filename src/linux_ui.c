@@ -7,10 +7,12 @@
 #include <stdlib.h>
 #include "ui_events.h"
 #include "linux_ui.h"
+#include "keyboard.h"
 
 static Uint32 g_ace_event_type = 0;
 static GtkWidget *main_window = NULL;
 static GtkWidget *g_menubar = NULL;
+static GtkWidget *g_jupiter_item = NULL;
 
 static void
 push_ace_event(int code, void *data1)
@@ -32,6 +34,16 @@ static void on_graphics(GtkWidget *w, gpointer data) { push_ace_event(ACE_EVENT_
 static void on_jupiter_layout(GtkWidget *w, gpointer data) { push_ace_event(ACE_EVENT_JUPITER_LAYOUT, NULL); }
 static void on_reset(GtkWidget *w, gpointer data) { push_ace_event(ACE_EVENT_RESET, NULL); }
 static void on_break(GtkWidget *w, gpointer data) { push_ace_event(ACE_EVENT_BREAK, NULL); }
+
+static void on_actions_menu_show(GtkWidget *widget, gpointer data) {
+    if (g_jupiter_item) {
+        if (keyboard_get_jupiter_layout()) {
+            gtk_menu_item_set_label(GTK_MENU_ITEM(g_jupiter_item), "Native Keyboard (F8)");
+        } else {
+            gtk_menu_item_set_label(GTK_MENU_ITEM(g_jupiter_item), "Jupiter Keyboard (F8)");
+        }
+    }
+}
 
 static void on_attach_tape(GtkWidget *w, gpointer data) {
     GtkWidget *dialog = gtk_file_chooser_dialog_new("Attach Tape Image",
@@ -205,6 +217,7 @@ void* linux_create_window(int width, int height, const char* title, Uint32 user_
     
     // Actions
     GtkWidget *actions_menu = gtk_menu_new();
+    g_signal_connect(actions_menu, "show", G_CALLBACK(on_actions_menu_show), NULL);
     GtkWidget *actions_item = gtk_menu_item_new_with_label("Actions");
     gtk_menu_item_set_submenu(GTK_MENU_ITEM(actions_item), actions_menu);
     
@@ -220,9 +233,9 @@ void* linux_create_window(int width, int height, const char* title, Uint32 user_
     g_signal_connect(gfx_item, "activate", G_CALLBACK(on_graphics), NULL);
     gtk_menu_shell_append(GTK_MENU_SHELL(actions_menu), gfx_item);
     
-    GtkWidget *jupiter_item = gtk_menu_item_new_with_label("Toggle Jupiter Layout (F8)");
-    g_signal_connect(jupiter_item, "activate", G_CALLBACK(on_jupiter_layout), NULL);
-    gtk_menu_shell_append(GTK_MENU_SHELL(actions_menu), jupiter_item);
+    g_jupiter_item = gtk_menu_item_new_with_label("Jupiter Keyboard (F8)");
+    g_signal_connect(g_jupiter_item, "activate", G_CALLBACK(on_jupiter_layout), NULL);
+    gtk_menu_shell_append(GTK_MENU_SHELL(actions_menu), g_jupiter_item);
     
     gtk_menu_shell_append(GTK_MENU_SHELL(actions_menu), gtk_separator_menu_item_new());
     

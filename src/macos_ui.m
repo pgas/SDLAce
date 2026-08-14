@@ -19,6 +19,7 @@
 #include <string.h>
 
 #include "macos_ui.h"
+#include "keyboard.h"
 
 /* The custom SDL event type registered by sdlmain.c */
 static Uint32 g_ace_event_type = 0;
@@ -41,10 +42,22 @@ push_ace_event(int code, void *data1)
 /* -------------------------------------------------------------------------
  * Menu delegate – one method per action
  * ------------------------------------------------------------------------- */
-@interface AceMenuDelegate : NSObject
+@interface AceMenuDelegate : NSObject <NSMenuItemValidation>
 @end
 
 @implementation AceMenuDelegate
+
+- (BOOL)validateMenuItem:(NSMenuItem *)menuItem
+{
+    if (menuItem.action == @selector(acJupiterLayout:)) {
+        if (keyboard_get_jupiter_layout()) {
+            menuItem.title = @"Native Keyboard";
+        } else {
+            menuItem.title = @"Jupiter Keyboard";
+        }
+    }
+    return YES;
+}
 
 - (void)acDeleteLine:(id)sender
 {
