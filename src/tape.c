@@ -121,6 +121,9 @@ tape_patches(char *mem)
   mem[0x1822]=0xc9;
 }
 
+static int load_header = 1;
+static int save_header = 1;
+
 FILE *
 tape_attach(char *filename)
 {
@@ -132,6 +135,8 @@ tape_attach(char *filename)
     tape_rewind_to_start();
 
   if (tape_fp) {
+    load_header = 1;
+    save_header = 1;
     strncpy(tape_filename, filename, TAPE_MAX_FILENAME_SIZE);
     tape_notify_observers(TAPE_MESSAGE, "Tape image attached.");
   } else {
@@ -147,6 +152,8 @@ tape_detach(void)
   if (tape_fp != NULL) {
     fclose(tape_fp);
     tape_fp = NULL;
+    load_header = 1;
+    save_header = 1;
     tape_notify_observers(TAPE_MESSAGE, "Tape image detached.");
   }
 }
@@ -156,7 +163,6 @@ tape_load_p(char *mem, int block_dest_offset, int req_len, int flag_byte)
 {
   char found_filename[11];
   char requested_filename[11];
-  static int load_header = 1;
   char message[TAPE_MAX_MESSAGE_SIZE] = "";
 
   if (tape_eof()) {
@@ -201,7 +207,6 @@ void
 tape_save_p(char *mem, int block_size)
 {
   char filename[32];
-  static int save_header = 1;
   char message[TAPE_MAX_MESSAGE_SIZE] = "";
 
   if (!tape_fp) {
@@ -355,6 +360,7 @@ tape_skip_block(void)
 static void
 tape_save_block(char *block, int block_size)
 {
+  fseek(tape_fp, 0, SEEK_CUR);
   fputc(low_byte(block_size+1), tape_fp);
   fputc(high_byte(block_size+1), tape_fp);
   fwrite(block, 1, block_size, tape_fp);
@@ -365,9 +371,11 @@ tape_save_block(char *block, int block_size)
 static void
 tape_truncate(void)
 {
+  fflush(tape_fp);
   if (ftruncate(fileno(tape_fp), ftell(tape_fp)) != 0) {
     tape_notify_observers(TAPE_ERROR, "Couldn't truncate file.");
   }
+  fseek(tape_fp, 0, SEEK_CUR);
 }
 
 /* Returns a checksum calculated by XORing each value in data */

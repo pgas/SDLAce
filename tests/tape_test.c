@@ -26,12 +26,14 @@
 #include "tape.h"
 
 /* Stubs for z80.h memory mapping used by store() in tape.c */
-static unsigned char test_mem_page[8192];
+int hardware_contention_enabled = 0;
+unsigned char mem[65536];
 unsigned char *memptr[8] = {
-  test_mem_page, test_mem_page, test_mem_page, test_mem_page,
-  test_mem_page, test_mem_page, test_mem_page, test_mem_page
+  mem,          mem + 0x2000, mem + 0x4000,
+  mem + 0x6000, mem + 0x8000, mem + 0xa000,
+  mem + 0xc000, mem + 0xe000
 };
-int memattr[8] = {0, 1, 1, 1, 1, 1, 1, 1};
+int memattr[8] = {1, 1, 1, 1, 1, 1, 1, 1};
 unsigned long tstates = 0;
 
 /* Generate a block of data to save and compare */
@@ -209,7 +211,6 @@ static void
 test_tape_load_p_first_dict_on_tape()
 {
   int i;
-  unsigned char mem[65536];
   char *filename = "fixtures/test.tap";
   char *filename_on_tape = "test      ";
 
@@ -220,7 +221,7 @@ test_tape_load_p_first_dict_on_tape()
   observer_status_init();
   tape_add_observer(observer);
 
-  tape_load_p((char *)mem, 10, 10, 0);
+  tape_load_p((char *)mem, 10, 11, 0);
   /* Check correct name is in memory */
   assert(memcmp(mem+10+1, mem+9986, 10) == 0);
 
@@ -254,7 +255,6 @@ static void
 test_tape_load_p_second_dict_on_tape()
 {
   int i;
-  unsigned char mem[65536];
   char *filename = "fixtures/test.tap";
   char *filename_on_tape = "test2     ";
 
@@ -276,7 +276,7 @@ test_tape_load_p_second_dict_on_tape()
   assert(strcmp(observer_status.message, "Skipping file: test") == 0);
 
   /* Load the header block */
-  tape_load_p((char *)mem, 10, 10, 0);
+  tape_load_p((char *)mem, 10, 11, 0);
   /* Check correct name is in memory */
   assert(memcmp(mem+10+1, mem+9986, 10) == 0);
 
@@ -313,7 +313,6 @@ test_tape_save_p()
   char filename[] = "/tmp/tape_test_XXXXXX";  
   close(mkstemp(filename));
   FILE *fp;
-  unsigned char mem[65536];
 
   /* Create header and data block */
   generate_block((char *)mem, 25, 'A');
@@ -361,7 +360,6 @@ test_tape_save_p_truncate()
   char filename[] = "/tmp/tape_test_XXXXXX";  
   close(mkstemp(filename));
   FILE *fp;
-  unsigned char mem[65536];
   int i;
 
   /* Save 3 lots of header and data blocks */
@@ -377,8 +375,8 @@ test_tape_save_p_truncate()
   tape_attach(filename);
 
   /* Load first header and data blocks */
-  for(i = 0; i < 10; i++) {
-    mem[9986+i] = mem[100+i];
+  for(i = 0; i < 11; i++) {
+    mem[9985+i] = mem[0+i];
   }
   tape_load_p((char *)mem, 1000, 1000, 0);
   tape_load_p((char *)mem, 1150, 1150, 0);
