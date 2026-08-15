@@ -292,14 +292,18 @@ static void set_itimer(int ints_per_sec) {
   setitimer(ITIMER_REAL, &itv, NULL);
 }
 
+static int is_fast_speed = 0;
+
 static void normal_speed(void) {
   scrn_freq = 1;            /* refresh screen every 50Hz frame */
   tsmax = CYCLES_PER_FRAME; /* 3.25 MHz CPU: 65,000 t-states per 50Hz frame */
+  is_fast_speed = 0;
 }
 
 static void fast_speed(void) {
   scrn_freq = 4;
-  tsmax = ULONG_MAX;
+  tsmax = CYCLES_PER_FRAME;
+  is_fast_speed = 1;
 }
 
 /* --------------------------------------------------------------------------
@@ -515,41 +519,42 @@ unsigned int out(int h, int l, int a) {
  * Timing helpers (called by Z80 core)
  * -------------------------------------------------------------------------- */
 void fix_tstates(void) {
-  if (tsmax == CYCLES_PER_FRAME) {
-    /* 1. Generate audio for this 50Hz frame (65,000 t-states) */
-    if (1) {
-      unsigned int last_s =
-          (last_speaker_tstates * SAMPLES_PER_FRAME) / CYCLES_PER_FRAME;
-      if (last_s > SAMPLES_PER_FRAME)
-        last_s = SAMPLES_PER_FRAME;
-      float val = speaker_diaphragm_pos ? 0.15f : -0.15f;
-      for (unsigned int i = last_s; i < SAMPLES_PER_FRAME; i++) {
-        audio_buffer[i] = val;
-      }
-
-      /* Apply DC blocker filter to eliminate pops/crackles */
-      float prev_x = dc_blocker_prev_x;
-      float prev_y = dc_blocker_prev_y;
-      for (unsigned int i = 0; i < SAMPLES_PER_FRAME; i++) {
-        float x = audio_buffer[i];
-        float y = x - prev_x + 0.995f * prev_y;
-        prev_x = x;
-        prev_y = y;
-        audio_buffer[i] = y;
-      }
-      dc_blocker_prev_x = prev_x;
-      dc_blocker_prev_y = prev_y;
-
-      /* Queue audio */
-      ui_audio_queue(audio_buffer, SAMPLES_PER_FRAME);
-      last_speaker_tstates = 0;
+  /* 1. Generate audio for this 50Hz frame (65,000 t-states) */
+  if (1) {
+    unsigned int last_s =
+        (last_speaker_tstates * SAMPLES_PER_FRAME) / CYCLES_PER_FRAME;
+    if (last_s > SAMPLES_PER_FRAME)
+      last_s = SAMPLES_PER_FRAME;
+    float val = speaker_diaphragm_pos ? 0.15f : -0.15f;
+    for (unsigned int i = last_s; i < SAMPLES_PER_FRAME; i++) {
+      audio_buffer[i] = val;
     }
 
-    /* 2. Trigger Z80 50Hz maskable interrupt for screen refresh & timing */
-    if (interrupted == 0) {
-      interrupted = 1;
+    /* Apply DC blocker filter to eliminate pops/crackles */
+    float prev_x = dc_blocker_prev_x;
+    float prev_y = dc_blocker_prev_y;
+    for (unsigned int i = 0; i < SAMPLES_PER_FRAME; i++) {
+      float x = audio_buffer[i];
+      float y = x - prev_x + 0.995f * prev_y;
+      prev_x = x;
+      prev_y = y;
+      audio_buffer[i] = y;
     }
+    dc_blocker_prev_x = prev_x;
+    dc_blocker_prev_y = prev_y;
 
+    /* Queue audio */
+    ui_audio_queue(audio_buffer, SAMPLES_PER_FRAME);
+    last_speaker_tstates = 0;
+  }
+
+  /* 2. Trigger Z80 50Hz maskable interrupt for screen refresh & timing */
+  if (interrupted == 0) {
+    interrupted = 1;
+  }
+
+  /* 3. Pacing: skip delay when in turbo mode (spooling, pasting, or fast speed) */
+  if (!is_fast_speed && !spooler_active()) {
     ui_sync_frame();
   }
 
