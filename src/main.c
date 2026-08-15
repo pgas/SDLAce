@@ -47,6 +47,8 @@
 /* Top border is taller to fit the "JUPITER ACE" brand text + red stripes.
  * The value here is at SCALE=2 (native 1× = half); we scale proportionally. */
 
+#define CYCLES_PER_FRAME 65000
+
 /* --------------------------------------------------------------------------
  * Global state shared with the Z80 core
  * -------------------------------------------------------------------------- */
@@ -56,7 +58,7 @@ unsigned char *memptr[8] = {mem,          mem + 0x2000, mem + 0x4000,
                             mem + 0x6000, mem + 0x8000, mem + 0xa000,
                             mem + 0xc000, mem + 0xe000};
 
-unsigned long tstates = 0, tsmax = 62500;
+unsigned long tstates = 0, tsmax = CYCLES_PER_FRAME;
 
 int memattr[8] = {0, 1, 1, 1, 1, 1, 1, 1}; /* 8K RAM Banks */
 
@@ -90,7 +92,7 @@ static float dc_blocker_prev_x = 0.0f;
 static float dc_blocker_prev_y = 0.0f;
 
 static void set_speaker_diaphragm(int pos) {
-  if (tsmax != CYCLES_PER_FRAME || 0) {
+  if (tsmax != CYCLES_PER_FRAME) {
     speaker_diaphragm_pos = pos;
     return;
   }
@@ -188,68 +190,28 @@ static void ui_event_handler(UiEvent *ev) {
   char spool_filename[257];
   char tape_filename[257];
   switch (ev->type) {
-    case UI_EVENT_QUIT:
-      raise(SIGQUIT);
-      break;
-    case UI_EVENT_DELETE_LINE:
-      keyboard_keypress(SDLK_F1, 0);
-      pending_release_key = SDLK_F1;
-      pending_release_timer = 10;
-      break;
-    case UI_EVENT_ATTACH_TAPE:
-      if (ev->data1) {
-        tape_attach((char*)ev->data1);
-        free(ev->data1);
-      } else {
-        printf("Enter tape image file: ");
-        fflush(stdout);
-        if (scanf("%256s", tape_filename) == 1) tape_attach(tape_filename);
-      }
-      break;
-    case UI_EVENT_REWIND_TAPE:
-      tape_rewind();
-      break;
-    case UI_EVENT_INVERSE_VIDEO:
-      keyboard_keypress(SDLK_F4, 0);
-      pending_release_key = SDLK_F4;
-      pending_release_timer = 10;
-      break;
-    case UI_EVENT_GRAPHICS:
-    case UI_EVENT_TOGGLE_GRAPHICS:
-      keyboard_keypress(SDLK_F9, 0);
-      pending_release_key = SDLK_F9;
-      pending_release_timer = 10;
-      break;
-    case UI_EVENT_SPOOL:
-      if (ev->data1) {
-        spooler_open((char*)ev->data1);
-        free(ev->data1);
-      } else {
-        printf("Enter spool file: ");
-        fflush(stdout);
-        if (scanf("%256s", spool_filename) == 1) spooler_open(spool_filename);
-      }
-      break;
-    case UI_EVENT_RESET:
-      reset_ace = 1;
-      memset(mem + 8192, 0xff, 57344);
-      refresh_screen = 1;
-      keyboard_clear();
-      break;
-    case UI_EVENT_BREAK:
-      keyboard_keypress(SDLK_ESCAPE, 0);
-      pending_release_key = SDLK_ESCAPE;
-      pending_release_timer = 10;
-      break;
-    case UI_EVENT_PASTE:
-      paste_from_clipboard();
-      break;
-    case UI_EVENT_JUPITER_LAYOUT:
-    case UI_EVENT_TOGGLE_JUPITER:
-      keyboard_toggle_jupiter_layout();
-      break;
-    default:
-      break;
+  case UI_EVENT_RESET:
+    reset_ace = 1;
+    speaker_diaphragm_pos = 0;
+    last_speaker_tstates = 0;
+    memset(mem + 8192, 0xff, 57344);
+    refresh_screen = 1;
+    keyboard_clear();
+    break;
+  case UI_EVENT_BREAK:
+    keyboard_keypress(SDLK_ESCAPE, 0);
+    pending_release_key = SDLK_ESCAPE;
+    pending_release_timer = 10;
+    break;
+  case UI_EVENT_PASTE:
+    paste_from_clipboard();
+    break;
+  case UI_EVENT_JUPITER_LAYOUT:
+  case UI_EVENT_TOGGLE_JUPITER:
+    keyboard_toggle_jupiter_layout();
+    break;
+  default:
+    break;
   }
 }
 

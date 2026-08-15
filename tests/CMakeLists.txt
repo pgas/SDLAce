@@ -23,6 +23,11 @@ target_link_libraries(spooler_test PRIVATE ${SDL2_LIB})
 add_executable(tape_test tape_test.c ${CMAKE_SOURCE_DIR}/src/tape.c)
 target_link_libraries(tape_test)
 
+add_executable(audio_test audio_test.c)
+target_include_directories(audio_test PRIVATE ${SDL2_INCLUDE_DIR})
+target_link_libraries(audio_test)
+
 add_test(NAME tape_test     COMMAND tape_test     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
 add_test(NAME keyboard_test COMMAND keyboard_test WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
 add_test(NAME spooler_test  COMMAND spooler_test  WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)
+add_test(NAME audio_test    COMMAND audio_test    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/tests)

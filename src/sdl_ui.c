@@ -325,7 +325,10 @@ void ui_audio_init(int sample_rate) {
 
 void ui_audio_queue(float *buffer, int samples) {
   if (sdl_audio_device != 0) {
-    SDL_QueueAudio(sdl_audio_device, buffer, samples * sizeof(float));
+    Uint32 queued_bytes = SDL_GetQueuedAudioSize(sdl_audio_device);
+    if (queued_bytes < (Uint32)(samples * sizeof(float) * 3)) {
+      SDL_QueueAudio(sdl_audio_device, buffer, samples * sizeof(float));
+    }
   }
 }
 
