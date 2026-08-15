@@ -293,13 +293,11 @@ static void set_itimer(int ints_per_sec) {
 }
 
 static void normal_speed(void) {
-  set_itimer(50);           /* 50 ints/sec */
   scrn_freq = 1;            /* refresh screen every 50Hz frame */
   tsmax = CYCLES_PER_FRAME; /* 3.25 MHz CPU: 65,000 t-states per 50Hz frame */
 }
 
 static void fast_speed(void) {
-  set_itimer(1000); /* 1000 ints/sec */
   scrn_freq = 4;
   tsmax = ULONG_MAX;
 }
@@ -415,6 +413,7 @@ error:
  * main
  * -------------------------------------------------------------------------- */
 int main(int argc, char **argv) {
+  setbuf(stdout, NULL);
   printf("SDLAce: Jupiter ACE emulator v%s\n", XACE_VERSION);
   printf("Keys:\n");
 #ifdef __APPLE__
@@ -492,28 +491,14 @@ void loadrom(unsigned char *x) {
 unsigned int in(int h, int l) {
   if ((l & 1) == 0) {
     set_speaker_diaphragm(0);
-  }
-  if (l == 0xfe) /* keyboard */
-    switch (h) {
-    case 0xfe:
-      return keyboard_get_keyport(0);
-    case 0xfd:
-      return keyboard_get_keyport(1);
-    case 0xfb:
-      return keyboard_get_keyport(2);
-    case 0xf7:
-      return keyboard_get_keyport(3);
-    case 0xef:
-      return keyboard_get_keyport(4);
-    case 0xdf:
-      return keyboard_get_keyport(5);
-    case 0xbf:
-      return keyboard_get_keyport(6);
-    case 0x7f:
-      return keyboard_get_keyport(7);
-    default:
-      return 255;
+    unsigned int val = 255;
+    for (int i = 0; i < 8; i++) {
+      if ((h & (1 << i)) == 0) {
+        val &= keyboard_get_keyport(i);
+      }
     }
+    return val;
+  }
   return 255;
 }
 

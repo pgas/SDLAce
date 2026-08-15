@@ -330,20 +330,10 @@ void ui_audio_queue(float *buffer, int samples) {
 }
 
 void ui_sync_frame(void) {
-  /* Frame pacing using SDL */
+  /* Frame pacing using high-precision SDL counter (50 Hz / 20.0 ms) */
   static Uint64 next_frame_counter = 0;
   Uint64 perf_freq = SDL_GetPerformanceFrequency();
   Uint64 ticks_per_frame = perf_freq / 50;
-
-  if (sdl_audio_device != 0) {
-    Uint32 queued_bytes = SDL_GetQueuedAudioSize(sdl_audio_device);
-    Uint32 target_bytes = (44100 / 50) * sizeof(float) * 2; /* approx 2 frames */
-    if (queued_bytes > target_bytes) {
-      Uint32 excess_bytes = queued_bytes - target_bytes;
-      Uint32 sleep_ms = (excess_bytes * 1000) / (44100 * sizeof(float));
-      if (sleep_ms >= 1) SDL_Delay(sleep_ms);
-    }
-  }
 
   Uint64 now = SDL_GetPerformanceCounter();
   if (next_frame_counter == 0 || now > next_frame_counter + ticks_per_frame * 5) {
@@ -352,7 +342,7 @@ void ui_sync_frame(void) {
     if (now < next_frame_counter) {
       Uint64 diff = next_frame_counter - now;
       Uint32 sleep_ms = (Uint32)((diff * 1000) / perf_freq);
-      if (sleep_ms >= 1) SDL_Delay(sleep_ms);
+      if (sleep_ms >= 2) SDL_Delay(sleep_ms - 1);
       while (SDL_GetPerformanceCounter() < next_frame_counter) {}
     }
     next_frame_counter += ticks_per_frame;
@@ -524,6 +514,7 @@ void ui_check_events(UiEventCallback cb) {
           refresh_screen_flag = 1;
         break;
       case SDL_KEYDOWN: {
+        if (ev.key.repeat != 0) break;
         SDL_Keycode ks = ev.key.keysym.sym;
         int mods = (int)ev.key.keysym.mod;
         if (keyboard_get_jupiter_layout()) ks = SDL_GetKeyFromScancode(ev.key.keysym.scancode);

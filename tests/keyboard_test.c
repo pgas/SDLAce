@@ -297,6 +297,31 @@ test_keyboard_jupiter_layout()
   keyboard_set_jupiter_layout(0);
 }
 
+static void
+test_keyboard_multi_row_and()
+{
+  /* Test that multi-row port read (e.g. h=0x00 scanning all rows) ANDs row keyports */
+  keyboard_init(non_ace_key_handler);
+  keyboard_keypress(SDLK_a, 0); /* Row 1 (Port 1), key 'a' -> bit 0 low -> 0xfe */
+  keyboard_keypress(SDLK_q, 0); /* Row 2 (Port 2), key 'q' -> bit 0 low -> 0xfe */
+
+  /* Single row reads */
+  assert(keyboard_get_keyport(1) == 0xfe);
+  assert(keyboard_get_keyport(2) == 0xfe);
+  assert(keyboard_get_keyport(0) == 0xff);
+
+  /* Multi-row check: bitwise AND across row 1 and 2 (h = 0xf9 = ~(1<<1 | 1<<2)) */
+  unsigned int result_f9 = keyboard_get_keyport(1) & keyboard_get_keyport(2);
+  assert(result_f9 == 0xfe);
+
+  /* All-row check: h = 0x00 */
+  unsigned int result_00 = 0xff;
+  for (int i = 0; i < 8; i++) {
+    result_00 &= keyboard_get_keyport(i);
+  }
+  assert(result_00 == 0xfe);
+}
+
 int main()
 {
   test_keyboard_clear();
@@ -311,5 +336,6 @@ int main()
   test_keyboard_keyrelease_ignore_keyports_for_keys_pressed_with_control_key();
   test_keyboard_shift_digit_and_graphics_mode();
   test_keyboard_jupiter_layout();
+  test_keyboard_multi_row_and();
   exit(0);
 }
