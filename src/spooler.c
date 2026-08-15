@@ -23,6 +23,7 @@
 
 static FILE *spooler_file = NULL;
 static int spooler_wait = 0;
+static int last_char_was_newline = 0;
 static enum {
   SPOOLER_INACTIVE,
   SPOOLER_READ_CHAR,
@@ -51,6 +52,7 @@ spooler_open(char *filename)
   if (spooler_file) {
     spooler_state = SPOOLER_READ_CHAR;
     spooler_wait = 0;
+    last_char_was_newline = 0;
     spooler_observer(SPOOLER_OPENED);
     clear_keyboard();
   } else {
@@ -79,12 +81,17 @@ spooler_read_char(void)
   if (ks == EOF) {
     spooler_close();
   } else {
+    last_char_was_newline = (ks == '\n' || ks == '\r');
     keypress(ks, 0);
   }
 }
 
-#define SPOOLER_HOLD_FRAMES 3
-#define SPOOLER_RELEASE_FRAMES 2
+/* Key hold frames: 1 frame (2 Z80 interrupts / 40ms) prevents Jupiter Ace ROM auto-repeat */
+#define SPOOLER_HOLD_FRAMES 1
+/* Release frames for normal characters */
+#define SPOOLER_RELEASE_FRAMES 1
+/* Extra release frames after ENTER so Jupiter Ace ROM has time to process/compile line */
+#define SPOOLER_NEWLINE_RELEASE_FRAMES 6
 
 void
 spooler_read(void)
@@ -109,7 +116,8 @@ spooler_read(void)
         clear_keyboard();
       }
       spooler_wait++;
-      if (spooler_wait >= SPOOLER_RELEASE_FRAMES) {
+      int target_release = last_char_was_newline ? SPOOLER_NEWLINE_RELEASE_FRAMES : SPOOLER_RELEASE_FRAMES;
+      if (spooler_wait >= target_release) {
         spooler_wait = 0;
         spooler_state = SPOOLER_READ_CHAR;
       }

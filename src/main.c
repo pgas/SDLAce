@@ -338,6 +338,7 @@ static void tape_observer(int tape_attached, int tape_pos,
 static void spooler_observer(SpoolerMessage message) {
   switch (message) {
   case SPOOLER_OPENED:
+    fast_speed();
     printf("Opened spool file.\n");
     break;
   case SPOOLER_OPEN_ERROR:
