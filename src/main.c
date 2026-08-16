@@ -132,6 +132,7 @@ void closedown(void);
 /* Custom SDL event type for macOS menu actions (registered at startup) */
 static void normal_speed(void);
 static void fast_speed(void);
+static void sigquit_handler(int signum);
 
 /* --------------------------------------------------------------------------
  * Paste from clipboard — writes clipboard text to a temp file, then feeds
@@ -190,6 +191,50 @@ static void ui_event_handler(UiEvent *ev) {
   char spool_filename[257];
   char tape_filename[257];
   switch (ev->type) {
+  case UI_EVENT_QUIT:
+    sigquit_handler(0);
+    break;
+  case UI_EVENT_DELETE_LINE:
+    keyboard_keypress(SDLK_F1, 0);
+    pending_release_key = SDLK_F1;
+    pending_release_timer = 10;
+    break;
+  case UI_EVENT_ATTACH_TAPE:
+    if (ev->data1) {
+      tape_attach((char *)ev->data1);
+      free(ev->data1);
+    } else {
+      printf("Enter tape image file: ");
+      fflush(stdout);
+      if (scanf("%256s", tape_filename) == 1)
+        tape_attach(tape_filename);
+    }
+    break;
+  case UI_EVENT_REWIND_TAPE:
+    tape_rewind();
+    break;
+  case UI_EVENT_INVERSE_VIDEO:
+    keyboard_keypress(SDLK_F4, 0);
+    pending_release_key = SDLK_F4;
+    pending_release_timer = 10;
+    break;
+  case UI_EVENT_GRAPHICS:
+  case UI_EVENT_TOGGLE_GRAPHICS:
+    keyboard_keypress(SDLK_F9, 0);
+    pending_release_key = SDLK_F9;
+    pending_release_timer = 10;
+    break;
+  case UI_EVENT_SPOOL:
+    if (ev->data1) {
+      spooler_open((char *)ev->data1);
+      free(ev->data1);
+    } else {
+      printf("Enter spool file: ");
+      fflush(stdout);
+      if (scanf("%256s", spool_filename) == 1)
+        spooler_open(spool_filename);
+    }
+    break;
   case UI_EVENT_RESET:
     reset_ace = 1;
     speaker_diaphragm_pos = 0;
